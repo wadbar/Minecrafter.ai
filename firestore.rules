@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function existing() { return resource.data; }
+    function incoming() { return request.resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'createdAt']) 
+        && data.keys().size() == 2
+        && data.email is string && data.email.size() <= 256
+        && data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isValidId(userId) && isOwner(userId) 
+                    && isValidUser(incoming())
+                    && incoming().createdAt == request.time;
+      allow update: if isValidId(userId) && isOwner(userId)
+                    && isValidUser(incoming())
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['email'])
+                    && incoming().createdAt == existing().createdAt;
+    }
+
+    function isValidArtifact(data) {
+      return data.keys().hasAll(['userId', 'type', 'title', 'content', 'createdAt'])
+        && data.keys().size() == 5
+        && data.userId is string && data.userId.size() <= 128
+        && data.type is string && data.type in ['skin', 'map', 'mod', 'texture', 'storyteller']
+        && data.title is string && data.title.size() <= 1000
+        && data.content is string && data.content.size() <= 1000000 // up to ~1MB
+        && data.createdAt is timestamp;
+    }
+
+    match /artifacts/{artifactId} {
+      allow get: if isOwner(existing().userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isValidId(artifactId)
+                    && isOwner(incoming().userId)
+                    && isValidArtifact(incoming())
+                    && incoming().createdAt == request.time
+                    && exists(/databases/$(database)/documents/users/$(incoming().userId));
+                    
+      allow update: if isValidId(artifactId)
+                    && isOwner(existing().userId)
+                    && isOwner(incoming().userId)
+                    && isValidArtifact(incoming())
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'content'])
+                    && incoming().createdAt == existing().createdAt;
+                    
+      allow delete: if isValidId(artifactId) && isOwner(existing().userId);
+    }
+  }
+}

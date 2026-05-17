@@ -1,0 +1,10 @@
+{
+  "name": "Minecrafter.AI",
+  "description": "Um gerador universal de recursos para Minecraft com IA. Crie mapas, terrenos, mods, plugins, texturas e skins usando inteligência artificial e comandos de voz.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile in the application.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "User's email address."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "Artifact": {
+      "title": "Artifact",
+      "description": "A saved generation artifact (skin, map, mod, etc.).",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "ID of the user who owns this artifact."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["skin", "map", "mod", "texture", "storyteller"],
+          "description": "The type of the generated artifact."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title or prompt used for the generation."
+        },
+        "content": {
+          "type": "string",
+          "description": "The generated content (SVG, source code, JSON, etc.)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "type", "title", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "User"
+      },
+      "description": "Stores user profiles."
+    },
+    "/artifacts/{artifactId}": {
+      "schema": {
+        "$ref": "Artifact"
+      },
+      "description": "Stores all artifacts saved by users."
+    }
+  }
+}
