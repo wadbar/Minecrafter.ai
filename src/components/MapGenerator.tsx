@@ -91,31 +91,36 @@ const TERRAIN_PRESETS = [
     id: "flat", 
     label: "Flat World", 
     prompt: "Gere uma estrutura de mundo plano com camadas específicas de grama, terra e rocha, incluindo vilas e fortalezas raras.",
-    description: "Mundo perfeitamente plano com camadas customizadas."
+    description: "Mundo perfeitamente plano com camadas customizadas.",
+    params: { complexity: 20, density: 10, verticality: 0 }
   },
   { 
     id: "archipelago", 
     label: "Island Archipelago", 
     prompt: "Crie um arquipélago tropical com biomas variados em ilhas separadas, recifes de coral e estruturas de pirâmides oceânicas.",
-    description: "Grupo de ilhas tropicais com biomas oceânicos."
+    description: "Grupo de ilhas tropicais com biomas oceânicos.",
+    params: { complexity: 65, density: 40, verticality: 30 }
   },
   { 
     id: "mountains", 
     label: "Mountainous Region", 
     prompt: "Gere uma região de montanhas colossais com picos nevados, cavernas profundas e vilarejos encravados nos desfiladeiros.",
-    description: "Relevo extremo com picos elevados e vales profundos."
+    description: "Relevo extremo com picos elevados e vales profundos.",
+    params: { complexity: 80, density: 70, verticality: 95 }
   },
   { 
     id: "canyons", 
     label: "Canyon Lands", 
     prompt: "Crie um bioma de cânions profundos com estética badlands, depósitos de minério visíveis nas paredes e rios subterrâneos.",
-    description: "Cânions áridos com estratigrafia detalhada."
+    description: "Cânions áridos com estratigrafia detalhada.",
+    params: { complexity: 75, density: 85, verticality: 60 }
   },
   { 
     id: "floating", 
     label: "Floating Islands", 
     prompt: "Gere um mapa de ilhas flutuantes com pontes conectando-as, biomas flutuantes únicos e segredos escondidos no vazio entre elas.",
-    description: "Mundo de ilhas suspensas no vazio."
+    description: "Mundo de ilhas suspensas no vazio.",
+    params: { complexity: 90, density: 30, verticality: 100 }
   }
 ];
 
@@ -189,7 +194,16 @@ export default function MapGenerator() {
     const preset = TERRAIN_PRESETS.find(p => p.id === id);
     if (preset) {
       setActivePreset(id);
+      if (preset.params) {
+        setComplexity(preset.params.complexity);
+        setDensity(preset.params.density);
+        setVerticality(preset.params.verticality);
+      }
       window.dispatchEvent(new CustomEvent('set-builder-prompt', { detail: preset.prompt }));
+      toast.success(`Preset Ativado: ${preset.label}`, { 
+        description: "Parâmetros de geração ajustados automaticamente.",
+        icon: <Zap className="w-4 h-4 text-amber-500" />
+      });
     }
   };
 
