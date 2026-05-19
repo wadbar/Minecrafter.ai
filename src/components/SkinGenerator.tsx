@@ -138,6 +138,12 @@ export default function SkinGenerator() {
       return;
     }
 
+    const activePrompt = bypassParams?.prompt || prompt;
+    if (!activePrompt || activePrompt.trim().length === 0) {
+      toast.error("Prompt Vazio", { description: "Por favor, descreva a skin que você deseja gerar." });
+      return;
+    }
+
     const abortController = new AbortController();
 
     try {
@@ -145,7 +151,6 @@ export default function SkinGenerator() {
       setTelemetryLogs([]);
       addLog("Initializing Generation Pipeline...", "info");
       
-      const activePrompt = bypassParams?.prompt || prompt;
       setLastBasePrompt(activePrompt);
       
       const config = {
@@ -772,6 +777,7 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
   };
 
   const handleUseAsBase = (item: SkinHistoryItem) => {
+    setCurrentSkinUrl(item.url);
     setDetailLevel(item.params.detailLevel);
     setColorIntensity(item.params.colorIntensity);
     setStylization(item.params.stylization);
@@ -943,7 +949,7 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
                     return (
                       <div key={idx} className="relative group/hist">
                         <button 
-                          onClick={() => setCurrentSkinUrl(item.url)}
+                          onClick={() => handleUseAsBase(item)}
                           className={cn(
                             "w-full aspect-square rounded-xl border bg-neutral-950 p-2 transition-all hover:scale-105 active:scale-95 overflow-hidden",
                             isCurrent ? "border-emerald-500/50 bg-emerald-500/5 ring-1 ring-emerald-500/20" : "border-neutral-800 hover:border-neutral-700"
