@@ -13,6 +13,7 @@ import Dashboard from "./components/Dashboard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SystemStatus from "./components/SystemStatus";
 import { AuthProvider } from "./lib/firebase";
+import { cn } from "./lib/utils";
 
 // Lazy loading heavy generator components for performance optimization
 const MapGenerator = lazy(() => import("./components/MapGenerator"));
@@ -22,23 +23,62 @@ const SkinGenerator = lazy(() => import("./components/SkinGenerator"));
 const StorytellerGenerator = lazy(() => import("./components/StorytellerGenerator"));
 const Integrations = lazy(() => import("./components/Integrations"));
 const CloudVault = lazy(() => import("./components/CloudVault"));
-const MatrixSettings = lazy(() => import("./components/MatrixSettings"));
+const SystemSettings = lazy(() => import("./components/SystemSettings"));
+const ScriptHub = lazy(() => import("./components/ScriptHub"));
 
-export type ViewState = "dashboard" | "map" | "mod" | "texture" | "skin" | "storyteller" | "integrations" | "vault" | "settings";
+export type ViewState = "dashboard" | "map" | "mod" | "texture" | "skin" | "storyteller" | "scripthub" | "integrations" | "vault" | "settings";
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [telemetry, setTelemetry] = useState({ cpu: 42, load: 22 });
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTelemetry(prev => ({
-        ...prev,
-        cpu: 40 + Math.floor(Math.random() * 5),
-        load: 18 + Math.floor(Math.random() * 8)
-      }));
-    }, 15000);
+    // Initial state based on screen size
+    const isDesktop = window.innerWidth >= 1024;
+    setSidebarOpen(isDesktop);
+
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setSidebarOpen(true);
+      } else if (window.innerWidth < 768) {
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    const fetchTelemetry = async () => {
+      try {
+        const res = await fetch("/api/health");
+        const data = await res.json();
+        
+        let memoryLoad = 22;
+        let cpuLoad = 42;
+        
+        if (data.memory) {
+          memoryLoad = Math.floor((data.memory.heapUsed / data.memory.heapTotal) * 100);
+        }
+        
+        setTelemetry(prev => ({
+          ...prev,
+          cpu: 40 + Math.floor(Math.random() * 5),
+          load: memoryLoad
+        }));
+      } catch (err) {
+        setTelemetry(prev => ({
+          ...prev,
+          cpu: 40,
+          load: 0
+        }));
+      }
+    };
+    
+    fetchTelemetry();
+    const interval = setInterval(fetchTelemetry, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -50,15 +90,15 @@ export default function App() {
     };
     
     const handleVoiceReady = () => {
-      console.log("[Matrix Stream] VOICE_RECOGNITION_READY event received.");
+      console.log("[Service Stream] VOICE_RECOGNITION_READY event received.");
       setTelemetry(prev => ({ ...prev, voiceActive: true }));
     };
 
-    window.addEventListener('matrix-navigate', handleNavigation);
+    window.addEventListener('sys-navigate', handleNavigation);
     window.addEventListener('VOICE_RECOGNITION_READY', handleVoiceReady);
 
     return () => {
-      window.removeEventListener('matrix-navigate', handleNavigation);
+      window.removeEventListener('sys-navigate', handleNavigation);
       window.removeEventListener('VOICE_RECOGNITION_READY', handleVoiceReady);
     };
   }, []);
@@ -66,32 +106,65 @@ export default function App() {
   // Lazy loading fallback skeleton
   const LoadingFallback = () => (
     <div className="flex h-full w-full items-center justify-center text-neutral-500 font-mono text-sm animate-pulse">
-      [ CARREGANDO MÓDULO NEURAL... ]
+      [ CARREGANDO MÓDULO DE EXECUÇÃO... ]
     </div>
   );
 
   return (
     <AuthProvider>
-      <div className="flex h-screen bg-neutral-950 text-neutral-50 overflow-hidden font-sans selection:bg-emerald-500/30 matrix-bg">
-        <Toaster theme="dark" position="bottom-right" />
-        <Sidebar
-          isOpen={sidebarOpen}
-          setIsOpen={setSidebarOpen}
-          currentView={currentView}
-          setCurrentView={setCurrentView}
-        />
+      <div className="flex flex-col h-screen bg-neutral-950 overflow-hidden font-sans selection:bg-emerald-500/30 industrial-bg">
+        {/* Desktop Title Bar (Chromium Shell Simulation) */}
+        <div className="h-8 bg-black border-b border-white/5 flex items-center justify-between px-4 z-50 shrink-0 select-none">
+          <div className="flex items-center gap-4">
+            <div className="flex gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/40 hover:bg-red-500 transition-colors" />
+              <div className="w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500 transition-colors" />
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 hover:bg-emerald-500 transition-colors" />
+            </div>
+            <div className="h-3 w-px bg-neutral-800" />
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-600">Industrial Solutions Builder Core</span>
+          </div>
+          <div className="flex items-center gap-5 text-[9px] font-bold text-neutral-600 uppercase tracking-[0.2em]">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-neutral-900 rounded border border-neutral-800">
+               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_rgba(16,185,129,1)]" />
+               <span className="text-emerald-500/80">SANDBOX_VM_ACTIVE</span>
+            </div>
+            <span className="hover:text-emerald-500 transition-colors cursor-default">File</span>
+            <span className="hover:text-emerald-500 transition-colors cursor-default">Processor</span>
+            <span className="hover:text-emerald-500 transition-colors cursor-default underline decoration-emerald-500/30 underline-offset-4">Sys_Dev</span>
+          </div>
+        </div>
+
+        <div className="flex flex-1 overflow-hidden relative">
+          <Toaster theme="dark" position="bottom-right" />
+          <Sidebar
+            isOpen={sidebarOpen}
+            setIsOpen={setSidebarOpen}
+            currentView={currentView}
+            setCurrentView={setCurrentView}
+          />
         <main className="flex-1 overflow-y-auto relative">
-        <header className="sticky top-0 z-10 flex h-16 items-center px-6 bg-neutral-950/80 backdrop-blur-md border-b border-neutral-900 justify-between">
-          <div className="flex items-center">
+        <header className="sticky top-0 z-40 flex h-20 items-center px-4 md:px-8 bg-neutral-950/50 backdrop-blur-xl border-b border-neutral-900/50 justify-between">
+          <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 -ml-2 rounded-lg hover:bg-neutral-800 transition-colors"
+              className={cn(
+                "p-2.5 rounded-xl transition-all active:scale-90 group relative overflow-hidden",
+                sidebarOpen ? "bg-emerald-500/10 text-emerald-500" : "bg-neutral-900 text-neutral-400 hover:text-white"
+              )}
+              aria-label="Toggle Menu"
             >
-              <Menu className="w-5 h-5 text-neutral-500" />
+              <Menu className={cn("w-6 h-6 transition-transform duration-500", sidebarOpen && "rotate-180")} />
+              {/* Pulse effect when closed on mobile */}
+              {!sidebarOpen && (
+                <div className="absolute inset-0 border border-emerald-500/20 rounded-xl animate-pulse md:hidden" />
+              )}
             </button>
-            <div className="ml-6 flex flex-col">
-              <div className="font-mono text-[10px] font-bold tracking-[0.3em] uppercase text-neutral-600 mb-0.5 leading-none">Matrix_View</div>
-              <div className="font-mono text-xs font-bold text-emerald-500 uppercase tracking-widest">{currentView}</div>
+            <div className="flex flex-col">
+              <div className="font-mono text-[9px] font-black tracking-[0.4em] uppercase text-neutral-700 mb-0.5 leading-none">Solutions_Builder</div>
+              <div className="font-mono text-sm font-black text-emerald-500 uppercase tracking-widest drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]">
+                {currentView}
+              </div>
             </div>
           </div>
 
@@ -101,7 +174,7 @@ export default function App() {
                 <span className="text-emerald-500">{telemetry.cpu}°C [STABLE]</span>
              </div>
              <div className="flex flex-col items-end">
-                <span className="text-neutral-700">Neural_Load</span>
+                <span className="text-neutral-700">Process_Load</span>
                 <span className="text-sky-500">{telemetry.load}% [NOMINAL]</span>
              </div>
              <div className="flex flex-col items-end">
@@ -119,15 +192,17 @@ export default function App() {
               {currentView === "texture" && <TextureGenerator />}
               {currentView === "skin" && <SkinGenerator />}
               {currentView === "storyteller" && <StorytellerGenerator />}
+              {currentView === "scripthub" && <ScriptHub />}
               {currentView === "integrations" && <Integrations />}
               {currentView === "vault" && <CloudVault />}
-              {currentView === "settings" && <MatrixSettings />}
+              {currentView === "settings" && <SystemSettings />}
             </Suspense>
           </ErrorBoundary>
         </div>
       </main>
       <SystemStatus />
       </div>
+     </div>
     </AuthProvider>
   );
 }

@@ -1,6 +1,6 @@
 {
-  "name": "Minecrafter.AI",
-  "description": "Um gerador universal de recursos para Minecraft com IA. Crie mapas, terrenos, mods, plugins, texturas e skins usando inteligência artificial e comandos de voz.",
+  "name": "Minecraft Solution Builder",
+  "description": "Professional Engineering Suite for Minecraft. Generate maps, mods, skins, and scripts using high-performance logic and industrial-grade automation.",
   "requestFramePermissions": [
     "microphone"
   ],

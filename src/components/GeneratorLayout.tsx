@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Send, Mic, Loader2, StopCircle, RefreshCw, FileEdit, Plus, Globe, CloudUpload } from "lucide-react";
+import { Send, Mic, Loader2, StopCircle, RefreshCw, FileEdit, Plus, Globe, CloudUpload, Copy } from "lucide-react";
 import Markdown from "react-markdown";
 import { cn } from "../lib/utils";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ interface GeneratorLayoutProps {
   renderLoading?: () => React.ReactNode;
   supportsEditing?: boolean;
   extraControls?: React.ReactNode;
+  onVoiceCommand?: (transcript: string) => boolean;
 }
 
 export default React.memo(function GeneratorLayout({
@@ -34,6 +35,7 @@ export default React.memo(function GeneratorLayout({
   supportsEditing = false,
   extraControls,
   promptTemplates,
+  onVoiceCommand,
 }: GeneratorLayoutProps & { promptTemplates?: { label: string, prompt: string, description?: string }[] }) {
   const [prompt, setPrompt] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -179,7 +181,7 @@ export default React.memo(function GeneratorLayout({
         setIsListening(true);
         setInterimTranscript("");
         window.dispatchEvent(new CustomEvent('VOICE_RECOGNITION_READY'));
-        toast.info("Escuta Ativa", { description: "Falando no canal de voz da Matrix..." });
+        toast.info("Escuta Ativa", { description: "Falando no canal de voz..." });
       };
 
       recognition.onresult = (event: any) => {
@@ -228,13 +230,13 @@ export default React.memo(function GeneratorLayout({
 
           if (transcript === "parar" || transcript === "stop" || transcript === "cancelar") {
             stopGeneration();
-            toast.info("Geração Interrompida", { description: "Vetor neural desconectado via comando de voz." });
+            toast.info("Geração Interrompida", { description: "Desconectado via comando de voz." });
             recognition.stop();
             return;
           }
 
           if (transcript === "salvar" || transcript === "save" || transcript === "armazenar") {
-            const saveBtn = document.querySelector('[data-matrix-action="save"]') as HTMLButtonElement;
+            const saveBtn = document.querySelector('[data-action="save"]') as HTMLButtonElement;
             if (saveBtn) {
               saveBtn.click();
             } else {
@@ -274,15 +276,22 @@ export default React.memo(function GeneratorLayout({
             if (target === "configurações" || target === "configuração" || target === "settings" || target === "setting") view = "settings";
 
             if (view) {
-              window.dispatchEvent(new CustomEvent('matrix-navigate', { detail: view }));
+              window.dispatchEvent(new CustomEvent('nav-navigate', { detail: view }));
               toast.success("Navegação Iniciada", { description: `Mudando para o setor: ${target}` });
               recognition.stop();
               return;
             }
           }
 
+          // External interceptors (Component specific)
+          if (onVoiceCommand && onVoiceCommand(transcript)) {
+            recognition.stop();
+            return;
+          }
+
           // Default: Append to prompt
           setPrompt((prev) => prev ? `${prev} ${finalTranscript}` : finalTranscript);
+          window.dispatchEvent(new CustomEvent("voice-command-received", { detail: transcript }));
           toast.success("Transcrição Completa", { description: "Dictação processada com sucesso." });
         }
       };
@@ -317,11 +326,11 @@ export default React.memo(function GeneratorLayout({
   useEffect(() => {
     const handleExternalMic = () => toggleMic();
     const handleSetPrompt = (e: any) => setPrompt(e.detail);
-    window.addEventListener('trigger-matrix-mic', handleExternalMic);
-    window.addEventListener('set-matrix-prompt', handleSetPrompt);
+    window.addEventListener('trigger-mic', handleExternalMic);
+    window.addEventListener('set-builder-prompt', handleSetPrompt);
     return () => {
-      window.removeEventListener('trigger-matrix-mic', handleExternalMic);
-      window.removeEventListener('set-matrix-prompt', handleSetPrompt);
+      window.removeEventListener('trigger-mic', handleExternalMic);
+      window.removeEventListener('set-builder-prompt', handleSetPrompt);
     };
   }, [toggleMic]);
 
@@ -335,7 +344,7 @@ export default React.memo(function GeneratorLayout({
                 <div className="absolute inset-0 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping opacity-25" />
              </div>
              <div className="flex flex-col">
-                <span className="text-[10px] font-mono text-neutral-600 uppercase tracking-[0.4em] font-black leading-none mb-1">Matrix_Host_Connected</span>
+                <span className="text-[10px] font-mono text-neutral-600 uppercase tracking-[0.4em] font-black leading-none mb-1">Architecture_Connected</span>
                 <div className="h-[1px] w-full bg-gradient-to-r from-emerald-500/50 to-transparent" />
              </div>
           </div>
@@ -413,11 +422,22 @@ export default React.memo(function GeneratorLayout({
             value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isListening ? "Matrix_Audio_Buffer_Receiving..." : (mode === "edit" ? "Describe optimization directives for the source code above..." : placeholder)}
+          placeholder={isListening ? "Audio_Receiving..." : (mode === "edit" ? "Describe optimization directives for the source code above..." : placeholder)}
           className={cn("w-full bg-transparent pr-32 text-white placeholder-neutral-700 focus:outline-none transition-all resize-none scrollbar-thin overflow-y-auto text-sm font-medium", isListening && "animate-pulse")}
           rows={3}
         />
         <div className="absolute bottom-4 right-6 flex items-center gap-3">
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(prompt);
+              toast.success("Prompt Copiado", { description: "Conteúdo movido para a área de transferência." });
+            }}
+            disabled={!prompt.trim()}
+            className="p-2.5 rounded-xl transition-all border text-neutral-600 hover:text-neutral-400 border-transparent hover:bg-neutral-900 disabled:opacity-30"
+            title="Copy Prompt"
+          >
+            <Copy className="w-5 h-5" />
+          </button>
           <button
             onClick={toggleMic}
             className={cn(

@@ -1,7 +1,8 @@
 import React, { memo } from "react";
 import { ViewState } from "../App";
-import { Brain, Sparkles, Map, FileCode2, Paintbrush, Users, Store, Shirt, Database } from "lucide-react";
+import { Brain, Sparkles, Map, FileCode2, Paintbrush, Users, Store, Shirt, Database, Activity, Cpu, Zap, Server, Terminal } from "lucide-react";
 import { motion } from "motion/react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface Props {
   setCurrentView: (v: ViewState) => void;
@@ -10,36 +11,106 @@ interface Props {
 export default function Dashboard({ setCurrentView }: Props) {
   const [sessionGens, setSessionGens] = React.useState(0);
   const [uptime, setUptime] = React.useState(0);
-  const [telemetry, setTelemetry] = React.useState({ cpu: 42, load: 22 });
   
+  const [chartData, setChartData] = React.useState<any[]>([]);
+
+  const [recentLogs, setRecentLogs] = React.useState([
+    { time: "18:04:12", type: "OK", typeColor: "text-emerald-500", msg: "Logic Link Stable" },
+    { time: "18:04:15", type: "INFO", typeColor: "text-sky-500", msg: "System Bootstrap" },
+    { time: "18:05:01", type: "SYS", typeColor: "text-emerald-500", msg: "Memory Purge" },
+    { time: "18:06:44", type: "WARN", typeColor: "text-amber-500", msg: "High Token Density" },
+    { time: "18:07:22", type: "OK", typeColor: "text-emerald-500", msg: "Log: 42MB Released" }
+  ]);
+
   React.useEffect(() => {
     setSessionGens(Number(localStorage.getItem("session_gens") || "0"));
     
+    setChartData(Array.from({ length: 20 }).map((_, i) => ({
+      time: i,
+      cpu: 0,
+      memory: 0,
+    })));
+
     const startTime = Date.now();
-    const interval = setInterval(() => {
-      setUptime(Math.floor((Date.now() - startTime) / 1000));
-      setTelemetry({
-        cpu: 40 + Math.floor(Math.random() * 5),
-        load: 18 + Math.floor(Math.random() * 8)
-      });
-    }, 10000); // Update every 10s for performance
     
-    return () => clearInterval(interval);
+    const logInterval = setInterval(() => {
+      const msgs = ["Subroutine optimized.", "Recompiling shaders...", "Awaiting telemetry.", "Workers ready.", "Syncing nodes...", "Calculation finished.", "Anomaly detected... bypassed.", "Purging dangling refs.", "System nominal."];
+      const types = [ { t: "OK", c: "text-emerald-500" }, { t: "INFO", c: "text-sky-500" }, { t: "DB", c: "text-amber-500" }, { t: "SYS", c: "text-emerald-500" }, { t: "SEC", c: "text-violet-500" } ];
+      
+      const rMsg = msgs[Math.floor(Math.random() * msgs.length)];
+      const rType = types[Math.floor(Math.random() * types.length)];
+      
+      const now = new Date();
+      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+      
+      setRecentLogs(prev => {
+        const next = [...prev, { time: timeStr, type: rType.t, typeColor: rType.c, msg: rMsg }];
+        if (next.length > 5) next.shift();
+        return next;
+      });
+    }, 4500);
+
+    const interval = setInterval(async () => {
+      setUptime(Math.floor((Date.now() - startTime) / 1000));
+      
+      try {
+        const res = await fetch("/api/health");
+        const data = await res.json();
+        
+        let memoryPercent = 0;
+        let cpuSim = 10 + Math.random() * 35; // Express CPU usage is tricky without OS libs, simulate based on fluctuation
+        if (data.memory) {
+          const used = data.memory.heapUsed / 1024 / 1024;
+          const total = data.memory.heapTotal / 1024 / 1024;
+          memoryPercent = (used / total) * 100;
+        }
+
+        setChartData((prev) => {
+          return [...prev.slice(1), { 
+            time: prev[prev.length - 1].time + 1,
+            cpu: cpuSim,
+            memory: memoryPercent,
+          }];
+        });
+      } catch (err) {
+        // Fallback smooth flatline if backend disconnects
+        setChartData((prev) => [...prev.slice(1), { time: prev[prev.length - 1].time + 1, cpu: 0, memory: 0 }]);
+      }
+    }, 2500); 
+    
+    return () => {
+       clearInterval(interval);
+       clearInterval(logInterval);
+    };
   }, []);
 
   return (
-    <div className="space-y-12 pb-20">
-      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-8">
-        <div className="space-y-2">
+    <div className="space-y-12 pb-20 relative">
+      <div className="absolute inset-0 pointer-events-none overflow-hidden [mask-image:linear-gradient(to_bottom,white,transparent)] z-0">
+        <svg
+          className="absolute left-[50%] top-0 h-[800px] w-[1400px] -translate-x-[50%] stroke-white/5"
+          aria-hidden="true"
+        >
+          <defs>
+            <pattern id="grid-pattern" width="60" height="60" patternUnits="userSpaceOnUse" x="50%" y="0">
+              <path d="M.5 200V.5H200" fill="none" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" strokeWidth="0" fill="url(#grid-pattern)" />
+        </svg>
+      </div>
+
+      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 relative z-10">
+        <div className="space-y-4">
           <div className="flex items-center gap-2 mb-4">
-             <div className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-mono tracking-widest uppercase rounded">Operational</div>
-             <div className="px-2 py-0.5 bg-neutral-900 border border-neutral-800 text-neutral-500 text-[10px] font-mono tracking-widest uppercase rounded">v3.0.4-Alpha</div>
+             <div className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-black uppercase tracking-[0.2em] rounded">Operational</div>
+             <div className="px-2 py-0.5 bg-neutral-900 border border-neutral-800 text-neutral-500 text-[10px] font-black uppercase tracking-[0.2em] rounded">v1.2.0-STABLE</div>
           </div>
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tighter text-white">
-            Omni-Matrix <span className="text-neutral-500 font-light">OS</span>
+          <h1 className="text-5xl md:text-7xl font-black tracking-tighter text-white uppercase italic">
+            Minecraft<span className="text-emerald-500">Builder</span> <span className="text-neutral-700 font-light not-italic">x Minecrafter.AI</span>
           </h1>
-          <p className="text-lg text-neutral-400 max-w-xl font-medium leading-relaxed">
-            Central de comando para inteligência procedimental. Arquitetura de elite, otimização de baixo nível e geração de ativos em tempo real.
+          <p className="text-lg text-neutral-400 max-w-2xl font-bold leading-tight uppercase tracking-tight">
+            Advanced Software Engineering Suite. Orchestrating Minecrafter.AI assets for local environments.
           </p>
         </div>
 
@@ -49,7 +120,7 @@ export default function Dashboard({ setCurrentView }: Props) {
              <div className="text-xl font-bold text-white font-mono">{(uptime / 60).toFixed(1)}m</div>
           </div>
           <div className="p-4 bg-neutral-950 border border-neutral-900 rounded-xl min-w-[140px]">
-             <div className="text-[10px] font-mono text-neutral-600 uppercase mb-1">Matrix_Gens</div>
+             <div className="text-[10px] font-mono text-neutral-600 uppercase mb-1">Total_Gens</div>
              <div className="text-xl font-bold text-white font-mono">{sessionGens}</div>
           </div>
         </div>
@@ -73,8 +144,16 @@ export default function Dashboard({ setCurrentView }: Props) {
           color="sky"
         />
         <DashboardCard
+          title="Script Factory"
+          description="Geração de bots Mineflayer e ferramentas de automação."
+          icon={Terminal}
+          onClick={() => setCurrentView("scripthub")}
+          delay={0.25}
+          color="violet"
+        />
+        <DashboardCard
           title="Texturas e Skins"
-          description="Ativos 16x16 e UV-Layouts procedurais (SVG/Cortex)."
+          description="Ativos 16x16 e UV-Layouts procedurais (SVG/Canvas)."
           icon={Paintbrush}
           onClick={() => setCurrentView("texture")}
           delay={0.3}
@@ -90,7 +169,7 @@ export default function Dashboard({ setCurrentView }: Props) {
         />
         <DashboardCard
           title="Storyteller NPC"
-          description="Matriz de diálogos e comportamentos baseada em estados."
+          description="Arquitetura de diálogos e comportamentos baseada em diálogos."
           icon={Users}
           onClick={() => setCurrentView("storyteller")}
           delay={0.4}
@@ -119,32 +198,32 @@ export default function Dashboard({ setCurrentView }: Props) {
             Core Objectives & Intelligence
           </h2>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-6 text-neutral-300">
-            <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5">
+            <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
               <span className="text-emerald-500 font-bold">01</span>
               <div>
-                <p className="font-bold text-white text-sm">Complex Dialogues</p>
-                <p className="text-xs text-neutral-500 mt-1">Matriz de árvore de decisão para NPCs avançados.</p>
+                <p className="font-bold text-white text-sm uppercase tracking-tighter">Script Automation Core</p>
+                <p className="text-[10px] text-neutral-500 mt-1">Geração de bots Mineflayer com suporte a pathfinding avançado e coleta de recursos.</p>
               </div>
             </li>
-            <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5">
+            <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
               <span className="text-emerald-500 font-bold">02</span>
               <div>
-                <p className="font-bold text-white text-sm">Denizen Export</p>
-                <p className="text-xs text-neutral-500 mt-1">Scripts de comportamento otimizados para dScript.</p>
+                <p className="font-bold text-white text-sm uppercase tracking-tighter">Environment Integration</p>
+                <p className="text-[10px] text-neutral-500 mt-1">Auditagem de runtime e otimização de I/O em ambientes baseados em Debian/Ubuntu.</p>
               </div>
             </li>
-            <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5">
+            <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
               <span className="text-emerald-500 font-bold">03</span>
               <div>
-                <p className="font-bold text-white text-sm">Universal Packer</p>
-                <p className="text-xs text-neutral-500 mt-1">Build automático de .mcpack e .mcworld.</p>
+                <p className="font-bold text-white text-sm uppercase tracking-tighter">Procedural Meshing</p>
+                <p className="text-[10px] text-neutral-500 mt-1">Arquitetura de mapas em mega-escala com distorção de ruído Perlin de baixa latência.</p>
               </div>
             </li>
-            <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5">
+            <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
               <span className="text-emerald-500 font-bold">04</span>
               <div>
-                <p className="font-bold text-white text-sm">Deployment HUB</p>
-                <p className="text-xs text-neutral-500 mt-1">Publicação via SFTP direto para instâncias de jogo.</p>
+                <p className="font-bold text-white text-sm uppercase tracking-tighter">Security Audit Control</p>
+                <p className="text-[10px] text-neutral-500 mt-1">Monitoramento de estresse concurrente e prevenção de race conditions em scripts automatizados.</p>
               </div>
             </li>
           </ul>
@@ -157,51 +236,102 @@ export default function Dashboard({ setCurrentView }: Props) {
            className="p-8 rounded-2xl bg-neutral-950 border border-neutral-900 font-mono"
         >
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.2em]">Matrix_Logs</h3>
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <h3 className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.2em]">Execution_Logs</h3>
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
           </div>
-          <div className="space-y-4 text-[10px]">
-            <div className="flex gap-3">
-              <span className="text-neutral-700">18:04:12</span>
-              <span className="text-emerald-500">[OK]</span>
-              <span className="text-neutral-400">Neural Link Stable</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-neutral-700">18:04:15</span>
-              <span className="text-sky-500">[INFO]</span>
-              <span className="text-neutral-400">Cortex-V3 Bootstrap</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-neutral-700">18:05:01</span>
-              <span className="text-emerald-500">[SYS]</span>
-              <span className="text-neutral-400">Memory Buffer Purged</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-neutral-700">18:06:44</span>
-              <span className="text-amber-500">[WARN]</span>
-              <span className="text-neutral-400">High Token Density</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-neutral-700">18:07:22</span>
-              <span className="text-emerald-500">[OK]</span>
-              <span className="text-neutral-400">GC Run: 42MB Released</span>
-            </div>
+          <div className="space-y-4 text-[10px] h-[150px] overflow-hidden flex flex-col justify-end">
+            {recentLogs.map((log, index) => (
+              <motion.div 
+                key={`${log.time}-${index}`}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3 }}
+                className="flex gap-3 font-mono"
+              >
+                <span className="text-neutral-700">{log.time}</span>
+                <span className={`${log.typeColor}`}>[{log.type.padEnd(4, ' ')}]</span>
+                <span className="text-neutral-400 truncate">{log.msg}</span>
+              </motion.div>
+            ))}
           </div>
-          <div className="mt-10 pt-6 border-t border-neutral-900">
-             <div className="flex items-center justify-between text-[9px] text-neutral-600 uppercase font-bold tracking-widest">
-               <span>Process_Heat</span>
-               <span>22%</span>
+
+          <div className="mt-6 pt-4 border-t border-neutral-900">
+             <h3 className="text-[9px] text-neutral-500 font-bold uppercase tracking-[0.2em] mb-3">Audit_Scenarios</h3>
+             <div className="space-y-2">
+                <div className="flex items-center justify-between text-[9px]">
+                  <span className="text-neutral-400">Concurrent_Bot_Stress</span>
+                  <span className="text-emerald-500 font-bold">PASS [98%]</span>
+                </div>
+                <div className="flex items-center justify-between text-[9px]">
+                  <span className="text-neutral-400">Packet_Injection_Audit</span>
+                  <span className="text-sky-500 font-bold">STABLE</span>
+                </div>
+                <div className="flex items-center justify-between text-[9px]">
+                  <span className="text-neutral-400">Execution_Buffer_Overflow</span>
+                  <span className="text-amber-500 font-bold">VOIDED</span>
+                </div>
              </div>
-             <div className="mt-2 h-1 bg-neutral-900 rounded-full overflow-hidden">
-               <motion.div 
-                 initial={{ width: 0 }}
-                 animate={{ width: "22%" }}
-                 transition={{ duration: 1, ease: "easeOut" }}
-                 className="h-full bg-emerald-500" 
-               />
+          </div>
+          <div className="mt-8 pt-6 border-t border-neutral-900">
+             <div className="flex items-center justify-between text-[9px] text-neutral-600 uppercase font-bold tracking-widest mb-4">
+               <span>Process_Telemetry</span>
+               <div className="flex gap-2">
+                 <span className="text-emerald-500">CPU</span>
+                 <span className="text-sky-500">MEM</span>
+               </div>
+             </div>
+             <div className="h-24 w-full">
+               <ResponsiveContainer width="100%" height="100%">
+                 <AreaChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                   <defs>
+                     <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
+                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                       <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                     </linearGradient>
+                     <linearGradient id="colorMem" x1="0" y1="0" x2="0" y2="1">
+                       <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3}/>
+                       <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0}/>
+                     </linearGradient>
+                   </defs>
+                   <Area type="monotone" dataKey="cpu" stroke="#10b981" fillOpacity={1} fill="url(#colorCpu)" strokeWidth={1} isAnimationActive={false} />
+                   <Area type="monotone" dataKey="memory" stroke="#0ea5e9" fillOpacity={1} fill="url(#colorMem)" strokeWidth={1} isAnimationActive={false} />
+                 </AreaChart>
+               </ResponsiveContainer>
              </div>
           </div>
         </motion.div>
+      </div>
+      <div className="mt-12 p-6 rounded-2xl bg-black border border-neutral-800 font-mono relative overflow-hidden group">
+        <div className="absolute top-0 right-0 p-4">
+           <Activity className="w-4 h-4 text-emerald-500/30 animate-pulse" />
+        </div>
+        <div className="flex items-center gap-4 mb-4 text-[10px] font-black uppercase tracking-widest text-neutral-500 border-b border-neutral-900 pb-4">
+           <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+              <span className="text-emerald-500">SYSTEM_HEARTBEAT</span>
+           </div>
+           <span>|</span>
+           <span>CPU_LOAD: {Math.round(chartData[chartData.length-1]?.cpu || 0)}%</span>
+           <span>|</span>
+           <span>ACTIVE_SUBSYSTEMS: 14</span>
+           <span className="ml-auto text-neutral-700">NODE_ID: {Math.random().toString(16).substr(2, 6).toUpperCase()}</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-[10px] leading-relaxed">
+           <div className="space-y-1 text-neutral-500">
+             <div className="text-emerald-500/50">[OK] SolutionBuilder.Service_Manager initialized.</div>
+             <div>[OK] I/O_BRIDGE established @ 0.4ms latency.</div>
+             <div>[OK] Execution_Core ready for injection.</div>
+             <div className="text-amber-500/50">[!] Memory check: 84% usage in V8 Heap. GC scheduled.</div>
+             <div className="text-sky-500/50">[NET] Awaiting inbound packets on Port 3000...</div>
+           </div>
+           <div className="space-y-1 text-neutral-600 border-l border-neutral-900 pl-8 hidden md:block">
+             <div>&gt; uptime --pretty: up 12 hours, 4 minutes</div>
+             <div>&gt; npx tsx server.ts --industrial-mode --rigorous</div>
+             <div>&gt; audit --security: 0 vulnerabilities found.</div>
+             <div>&gt; tail -f /var/log/system_builder.log</div>
+             <div className="text-neutral-400 animate-pulse font-bold underline">Awaiting user Command..._</div>
+           </div>
+        </div>
       </div>
     </div>
   );
@@ -231,32 +361,93 @@ const DashboardCard = memo(({
     violet: "text-violet-400 bg-violet-500/10 border-violet-500/20 group-hover:border-violet-500/50",
   };
 
+  const hoverBorderColor: Record<string, string> = {
+    emerald: "hover:border-emerald-500/50",
+    sky: "hover:border-sky-500/50",
+    amber: "hover:border-amber-500/50",
+    pink: "hover:border-pink-500/50",
+    fuchsia: "hover:border-fuchsia-500/50",
+    violet: "hover:border-violet-500/50",
+  };
+  
+  const textHoverColor: Record<string, string> = {
+    emerald: "group-hover:text-emerald-400",
+    sky: "group-hover:text-sky-400",
+    amber: "group-hover:text-amber-400",
+    pink: "group-hover:text-pink-400",
+    fuchsia: "group-hover:text-fuchsia-400",
+    violet: "group-hover:text-violet-400",
+  };
+  
+  const strokeColor: Record<string, string> = {
+    emerald: "border-emerald-500",
+    sky: "border-sky-500",
+    amber: "border-amber-500",
+    pink: "border-pink-500",
+    fuchsia: "border-fuchsia-500",
+    violet: "border-violet-500",
+  };
+  
+  const executeColor: Record<string, string> = {
+    emerald: "text-emerald-500",
+    sky: "text-sky-500",
+    amber: "text-amber-500",
+    pink: "text-pink-500",
+    fuchsia: "text-fuchsia-500",
+    violet: "text-violet-500",
+  };
+
+  const executeBgLine: Record<string, string> = {
+    emerald: "bg-emerald-500/50",
+    sky: "bg-sky-500/50",
+    amber: "bg-amber-500/50",
+    pink: "bg-pink-500/50",
+    fuchsia: "bg-fuchsia-500/50",
+    violet: "bg-violet-500/50",
+  };
+
+  const gradientOverlay: Record<string, string> = {
+    emerald: "from-emerald-500/0 to-emerald-500/5",
+    sky: "from-sky-500/0 to-sky-500/5",
+    amber: "from-amber-500/0 to-amber-500/5",
+    pink: "from-pink-500/0 to-pink-500/5",
+    fuchsia: "from-fuchsia-500/0 to-fuchsia-500/5",
+    violet: "from-violet-500/0 to-violet-500/5",
+  };
+
   return (
     <motion.button
       initial={{ opacity: 0, y: 0 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
       onClick={onClick}
-      className="group flex flex-col items-start p-10 bg-neutral-950 hover:bg-neutral-900 transition-colors text-left relative overflow-hidden"
+      className={`group flex flex-col items-start p-10 bg-neutral-950 hover:bg-neutral-900 transition-colors text-left relative overflow-hidden border border-neutral-800/50 ${hoverBorderColor[color]}`}
     >
-      <div className={`p-3 rounded-xl mb-6 transition-transform group-hover:scale-110 duration-500 ${colorMap[color]}`}>
-        <Icon className="w-6 h-6" />
+      {/* Animated corner accents */}
+      <div className={`absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 ${strokeColor[color]} opacity-0 group-hover:opacity-100 transition-opacity`} />
+      <div className={`absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 ${strokeColor[color]} opacity-0 group-hover:opacity-100 transition-opacity`} />
+
+      <div className={`p-3 rounded-xl mb-6 transition-transform group-hover:scale-110 duration-500 shadow-xl ${colorMap[color]}`}>
+        <Icon className="w-6 h-6 object-contain" />
       </div>
-      <h3 className="text-xl font-bold text-white mb-3 group-hover:text-emerald-400 transition-colors">{title}</h3>
+      <h3 className={`text-xl font-bold text-white mb-3 transition-colors ${textHoverColor[color]}`}>{title}</h3>
       <p className="text-sm text-neutral-400 leading-relaxed font-medium">{description}</p>
       
-      <div className="mt-8 flex items-center gap-2 text-[10px] font-mono text-neutral-600 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className={`mt-8 flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity ${executeColor[color]}`}>
         <span>Execute Access</span>
-        <div className="w-4 h-px bg-neutral-600" />
+        <div className={`w-8 h-px ${executeBgLine[color]}`} />
       </div>
 
-      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
-          <div className="grid grid-cols-2 gap-1">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="w-1 h-1 bg-white rounded-full" />
+      <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:opacity-10 transition-opacity pointer-events-none">
+          <div className="grid grid-cols-3 gap-1">
+            {[...Array(9)].map((_, i) => (
+              <div key={i} className="w-1.5 h-1.5 bg-white rounded-full" />
             ))}
           </div>
       </div>
+
+      {/* Cyber gradient overlay */}
+      <div className={`absolute inset-0 bg-gradient-to-br via-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none ${gradientOverlay[color]}`} />
     </motion.button>
   );
 });

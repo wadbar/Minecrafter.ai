@@ -17,11 +17,53 @@ export default defineConfig(({mode}) => {
           enabled: true
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,json}']
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2}'],
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // <--- 1 year
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'gstatic-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // <--- 1 year
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              // Cache external dependencies or API responses if needed
+              urlPattern: ({ url }) => url.origin === 'https://textures.minecraft.net',
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'minecraft-textures-cache',
+                expiration: {
+                  maxEntries: 50,
+                  maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                }
+              }
+            }
+          ]
         },
         manifest: {
-          name: 'Omni Matrix Engine',
-          short_name: 'Matrix',
+          name: 'PaperCreeper Architecture',
+          short_name: 'PaperCreeper',
           description: 'Intelligent App Generation',
           theme_color: '#000000',
           icons: [

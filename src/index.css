@@ -53,10 +53,38 @@
 
   .matrix-bg {
     background-image: 
-      linear-gradient(to bottom, rgba(16, 185, 129, 0.03) 1px, transparent 1px),
-      linear-gradient(to right, rgba(16, 185, 129, 0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
+      linear-gradient(to bottom, rgba(16, 185, 129, 0.04) 1px, transparent 1px),
+      linear-gradient(to right, rgba(16, 185, 129, 0.04) 1px, transparent 1px);
+    background-size: 50px 50px;
     position: relative;
+    background-attachment: fixed;
+  }
+
+  .matrix-glow {
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+  }
+
+  .matrix-glow-sky {
+    text-shadow: 0 0 10px rgba(14, 165, 233, 0.6);
+  }
+
+  /* Scanline effect */
+  .scanline {
+    width: 100%;
+    height: 100px;
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(16, 185, 129, 0.03) 50%, rgba(0, 0, 0, 0) 100%);
+    opacity: 0.1;
+    position: absolute;
+    top: -100px;
+    left: 0;
+    pointer-events: none;
+    animation: scanline 10s linear infinite;
+    z-index: 60;
+  }
+
+  @keyframes scanline {
+    0% { top: -100px; }
+    100% { top: 100%; }
   }
 
   .matrix-bg::after {

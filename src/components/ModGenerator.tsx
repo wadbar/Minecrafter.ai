@@ -4,9 +4,12 @@ import Prism from "prismjs";
 import "prismjs/themes/prism-tomorrow.css";
 import "prismjs/components/prism-java";
 import "prismjs/components/prism-javascript";
-import { Loader2, Box, Layers, Sparkles, BookOpen } from "lucide-react";
+import { Loader2, Box, Layers, Sparkles, BookOpen, Download } from "lucide-react";
 import { saveArtifact } from "../lib/db";
 import { cn } from "../lib/utils";
+import { saveAs } from "file-saver";
+import { toast } from "sonner";
+import JSZip from "jszip";
 
 const FRAMEWORKS = [
   { id: "spigot", label: "Spigot Plugin", icon: "⚙️" },
@@ -17,45 +20,261 @@ const FRAMEWORKS = [
 ];
 
 const VERSIONS = ["1.21", "1.20.4", "1.19.4", "1.16.5", "1.12.2", "1.8.8"];
-const COMPLEXITIES = ["Standard", "Advanced (OO)", "Enterprise (SRE/Clean)"];
+const COMPLEXITIES = ["Standard", "Advanced (OO)", "Industrial (Clean Code)"];
+
+const API_DOCS: Record<string, { 
+  default: { description: string, docs: string, guides: string[] },
+  versions: Record<string, { highlights: string[] }> 
+}> = {
+  spigot: {
+    default: {
+      description: "Server-side plugins. Does not require clients to install anything.",
+      docs: "https://hub.spigotmc.org/javadocs/spigot/",
+      guides: ["Never block the main thread.", "Avoid heavy loops in PlayerMoveEvent.", "Run DB calls asynchronously."]
+    },
+    versions: {
+      "1.21": { highlights: ["Uses Data Components instead of NBT.", "New Trial Spawner APIs."] },
+      "1.20.4": { highlights: ["Armor Trim API.", "Display Entities added."] },
+      "1.16.5": { highlights: ["Hex color codes introduced. Use net.md_5.bungee.api.ChatColor.", "PersistentDataContainer recommended."] },
+      "1.8.8": { highlights: ["Legacy version. Heavily reliant on direct NBT manipulation.", "Combat update hasn't happened yet."] },
+    }
+  },
+  paper: {
+    default: {
+      description: "Paper offers an expanded API over Spigot, with better performance optimizations.",
+      docs: "https://jd.papermc.io/paper/",
+      guides: ["Use Folia for true multithreading if scaling high.", "Use Paper's AsyncChatEvent over Spigot's AsyncPlayerChatEvent.", "Profile with timings/spark."]
+    },
+    versions: {
+      "1.21": { highlights: ["Uses Data Components instead of NBT.", "Enhanced block lookup performance."] },
+      "1.20.4": { highlights: ["Folia compatibility considerations.", "Improved chunk generation API."] },
+      "1.16.5": { highlights: ["Async Chunk Loading introduced natively.", "Hex color parsing built-in via Kyori Adventure."] },
+      "1.8.8": { highlights: ["Paper 1.8.8 exists but is highly legacy.", "Consider using modernized forks if keeping 1.8.8."] },
+    }
+  },
+  fabric: {
+    default: {
+      description: "Lightweight and modular modding toolchain. Excellent for both server-side only mods and full client-server mods.",
+      docs: "https://maven.fabricmc.net/docs/yarn-latest/",
+      guides: ["Use Mixins for deep modifications.", "Client and server code must be clearly separated (use Environment annotations carefully)."]
+    },
+    versions: {
+      "1.21": { highlights: ["Data component modding.", "Update to new networking API standard."] },
+      "1.20.4": { highlights: ["Fabric API features robust command registration.", "Renderer API available for complex blocks."] },
+    }
+  },
+  forge: {
+    default: {
+      description: "The historical standard for deep engine modifications. Requires both client and server to install the mod.",
+      docs: "https://docs.minecraftforge.net/en/latest/",
+      guides: ["Uses EventBus for registry events.", "Use Capabilities for entity and tile entity data.", "Use DeferredRegister for cleaner code."]
+    },
+    versions: {
+      "1.21": { highlights: ["NeoForge split context - ensure you pick the right toolchain.", "Events API updated."] },
+      "1.16.5": { highlights: ["Capabilities heavily used.", "Blockstates and Models require careful JSON generation."] },
+      "1.12.2": { highlights: ["Classic golden era of modding.", "Requires IHasModel if not using modern registries."] }
+    }
+  },
+  skript: {
+    default: {
+      description: "High-level configuration-like language to create plugins without touching Java.",
+      docs: "https://skriptlang.github.io/Skript/",
+      guides: ["Fast prototyping for simple ideas.", "Avoid variables with no cleanup (can cause memory leaks).", "Not recommended for highly complex or performance-critical systems."]
+    },
+    versions: {
+      "1.21": { highlights: ["Skript 2.9+ recommended for component support."] },
+      "1.20.4": { highlights: ["Stable support with Skript 2.8+."] }
+    }
+  }
+};
 
 export default function ModGenerator() {
   const [framework, setFramework] = useState("spigot");
   const [version, setVersion] = useState("1.21");
   const [complexity, setComplexity] = useState("Standard");
-  const [showDocs, setShowDocs] = useState(false);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+
+  useEffect(() => {
+    setLoadingDocs(true);
+    const timer = setTimeout(() => {
+      setLoadingDocs(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [framework, version]);
 
   const generateMod = useCallback(async (prompt: string, existingData?: string, targetLanguage?: string) => {
-    const isEditMode = !!existingData;
-    const endpoint = isEditMode ? "/api/edit-mod" : "/api/generate-mod";
-    
-    // Anexa o contexto do framework no prompt no modo de criação se não for editar
-    const finalPrompt = isEditMode ? prompt : `(Contexto: ${framework.toUpperCase()} para Minecraft ${version}, Estilo de Código: ${complexity}) ${prompt}`;
+    try {
+      const isEditMode = !!existingData;
+      const endpoint = isEditMode ? "/api/edit-mod" : "/api/generate-mod";
+      
+      // Prompt Blindado (Supreme V9 Standard)
+      const systemContext = `
+# ROLE: Senior Minecraft Systems Engineer (V9)
+# CONTEXT: ${framework.toUpperCase()} | Version: ${version}
+# QUALITY: ${complexity}
+# CONSTRAINTS:
+- Use only valid API methods for ${version}.
+- Ensure thread safety (use Async tasks for I/O).
+- Apply SOLID principles.
+- If Java, ensure the class is public and follows naming conventions.
+- If version is 1.21+, use Data Components instead of NBT if applicable for ${framework}.
+`;
 
-    const body = isEditMode 
-      ? { prompt: finalPrompt, existingData, targetLanguage }
-      : { prompt: finalPrompt, type: `${framework}-plugin` };
+      const finalPrompt = isEditMode 
+        ? `${systemContext}\n# TASK: Refactor/Update/Translate\n${prompt}` 
+        : `${systemContext}\n# TASK: Create new logic\n${prompt}`;
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+      const body = isEditMode 
+        ? { prompt: finalPrompt, existingData, targetLanguage }
+        : { prompt: finalPrompt, type: `${framework}-plugin` };
 
-    // Clean up markdown ticks if Gemini provides them
-    let code = data.result;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      // Clean up markdown ticks if Gemini provides them
+      let code = data.result || "";
     if (code.startsWith("\`\`\`java")) {
       code = code.replace(/^\`\`\`java\n/, "");
     } else if (code.startsWith("\`\`\`javascript")) {
       code = code.replace(/^\`\`\`javascript\n/, "");
     }
-    if (code.endsWith("\`\`\`")) {
+    if (code.endsWith("```")) {
       code = code.slice(0, -3);
     }
     return code;
+    } catch (error: any) {
+      toast.error("Erro no Processamento", { description: error?.message || "Ocorreu uma falha na IA." });
+      throw error;
+    }
+  }, [framework, version, complexity]);
+
+  const handleDownloadJar = useCallback(async (code: string) => {
+    const zip = new JSZip();
+
+    // Analyze code for class name and package with improved regex
+    let className = "GeneratedMod";
+    let packageName = "";
+    
+    // Improved class name detection (handles generic classes, multiple modifiers)
+    const classMatch = code.match(/public\s+(?:abstract\s+|final\s+)?class\s+([A-Za-z0-9_]+)/);
+    if (classMatch && classMatch[1]) {
+      className = classMatch[1];
+    }
+    
+    // Improved package detection
+    const packageMatch = code.match(/package\s+([a-zA-Z0-9_.]+);/);
+    if (packageMatch && packageMatch[1]) {
+      packageName = packageMatch[1];
+    }
+
+    // Naming config: {MainClass}-{Framework}-{MCVersion}.jar
+    const safeName = className.replace(/[^a-zA-Z0-9_-]/g, "");
+    const cleanFramework = framework.charAt(0).toUpperCase() + framework.slice(1);
+    const fileName = `${safeName}-${cleanFramework}-${version}.jar`;
+
+    // Skript special case - not a JAR
+    if (framework === "skript") {
+      const blob = new Blob([code], { type: "text/plain" });
+      saveAs(blob, `${safeName}-${version}.sk`);
+      toast.success("Script Exportado", { description: `Arquivo .sk para Skript MC ${version}` });
+      return;
+    }
+
+    try {
+      // Java package structure
+      const packagePath = packageName ? packageName.replace(/\./g, "/") + "/" : "";
+      const fullSourcePath = `src/main/java/${packagePath}${className}.java`;
+      zip.file(fullSourcePath, code);
+
+      // Standard MANIFEST.MF
+      const mainClassPath = `${packageName ? packageName + "." : ""}${className}`;
+      const manifest = [
+        "Manifest-Version: 1.0",
+        `Created-By: Minecraft Solution Builder (SRE Core)`,
+        `Main-Class: ${mainClassPath}`,
+        ""
+      ].join("\n");
+      zip.file("META-INF/MANIFEST.MF", manifest);
+
+      // Metadata Generation Logic
+      const apiVersion = version.split(".").slice(0, 2).join("."); // e.g., 1.21.1 -> 1.21
+      const description = `Minecraft ${cleanFramework} mod: ${className}. Generated via AI Studio. Target: ${version}.`;
+      const author = "AI_Nexus_Generator";
+
+      if (framework === "spigot" || framework === "paper") {
+        const pluginYml = [
+          `name: ${className}`,
+          `version: 1.0.0`,
+          `main: ${mainClassPath}`,
+          `author: ${author}`,
+          `description: ${description}`,
+          `api-version: "${apiVersion}"`,
+          `load: POSTWORLD`,
+          `prefix: ${className.toUpperCase().slice(0, 8)}`
+        ].join("\n");
+        zip.file("plugin.yml", pluginYml);
+      } else if (framework === "fabric") {
+        const fabricModJson = JSON.stringify({
+          schemaVersion: 1,
+          id: className.toLowerCase().replace(/[^a-z0-9_]/g, "_"),
+          version: "1.0.0",
+          name: className,
+          description: description,
+          authors: [author],
+          contact: { homepage: "https://ai.studio/build" },
+          license: "MIT",
+          environment: "*",
+          entrypoints: {
+            main: [mainClassPath]
+          },
+          depends: {
+            fabricloader: ">=0.15.0",
+            minecraft: `>=${version}`,
+            java: ">=17"
+          }
+        }, null, 2);
+        zip.file("fabric.mod.json", fabricModJson);
+      } else if (framework === "forge") {
+        // mods.toml (Modern Forge/NeoForge)
+        const modsToml = [
+          `modLoader="javafml"`,
+          `loaderVersion="[40,)"`,
+          `license="MIT"`,
+          `[[mods]]`,
+          `modId="${className.toLowerCase().replace(/[^a-z0-9_]/g, "_")}"`,
+          `version="1.0.0"`,
+          `displayName="${className}"`,
+          `authors="${author}"`,
+          `description='''${description}'''`,
+        ].join("\n");
+        zip.file("META-INF/mods.toml", modsToml);
+        
+        // pack.mcmeta (Required by Forge)
+        zip.file("pack.mcmeta", JSON.stringify({
+          pack: {
+            description: `${className} resources`,
+            pack_format: 15 // Updated for modern versions
+          }
+        }, null, 2));
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      saveAs(content, fileName);
+      
+      toast.success("Download Concluído", {
+        description: `Arquivo ${fileName} sincronizado via buffer seguro.`
+      });
+    } catch (err: any) {
+      console.error("JAR Generation Error:", err);
+      toast.error("Erro na Geração", { description: "Falha ao codificar binário JAR." });
+    }
   }, [framework, version]);
+
 
   const handleSaveCloud = useCallback(async (title: string, result: string) => {
     await saveArtifact("mod", title, result);
@@ -71,22 +290,15 @@ export default function ModGenerator() {
             <Box className="w-3.5 h-3.5 text-sky-500" />
             <span className="uppercase tracking-widest font-bold text-[10px]">Engine</span>
           </div>
-          <div className="flex gap-1">
-            {FRAMEWORKS.map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setFramework(f.id)}
-                className={cn(
-                  "px-3 py-1.5 rounded text-[10px] font-bold transition-all flex items-center gap-1.5",
-                  framework === f.id
-                    ? "bg-sky-500/20 text-sky-400 border-sky-500/50"
-                    : "bg-transparent text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
-                )}
-              >
-                <span>{f.icon}</span> {f.label}
-              </button>
+          <select 
+            value={framework}
+            onChange={(e) => setFramework(e.target.value)}
+            className="bg-neutral-950 border border-neutral-700 rounded px-3 py-1.5 text-white focus:border-sky-500 focus:outline-none text-[10px] font-bold cursor-pointer hover:border-neutral-600 transition-colors"
+          >
+            {FRAMEWORKS.map(f => (
+              <option key={f.id} value={f.id}>{f.label}</option>
             ))}
-          </div>
+          </select>
         </div>
 
         {/* Version Selection */}
@@ -130,57 +342,60 @@ export default function ModGenerator() {
           </div>
         </div>
 
-        {/* Documentation Toggle */}
-        <button 
-          onClick={() => setShowDocs(!showDocs)}
-          className={cn(
-            "flex items-center gap-2 p-1.5 px-3 rounded-lg border transition-colors",
-            showDocs 
-              ? "bg-sky-500/20 border-sky-500/50 text-sky-400" 
-              : "bg-neutral-900/50 border-neutral-800 text-neutral-400 hover:bg-neutral-800"
-          )}
-        >
-          <BookOpen className="w-3.5 h-3.5" />
-          <span className="uppercase tracking-widest font-bold text-[10px]">Doc & APIs</span>
-        </button>
-
       </div>
 
-      {showDocs && (
-        <div className="bg-neutral-900/50 border border-neutral-800 p-4 rounded-lg text-xs text-neutral-400 leading-relaxed animate-in fade-in slide-in-from-top-2">
-          <h4 className="text-sky-400 font-bold mb-3 uppercase tracking-widest flex items-center gap-2">
+      <div className="bg-neutral-900/50 border border-neutral-800 p-4 rounded-lg text-xs leading-relaxed animate-in fade-in slide-in-from-top-2">
+        <div className="flex items-center justify-between mb-3 border-b border-neutral-800 pb-2">
+          <h4 className="text-sky-400 font-bold uppercase tracking-widest flex items-center gap-2">
             <BookOpen className="w-4 h-4" /> 
-            Modding API Reference & Best Practices
+            {FRAMEWORKS.find(f => f.id === framework)?.label} {version} Reference
           </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-3">
+          <a 
+              href={API_DOCS[framework]?.default.docs || "#"} 
+              target="_blank" rel="noopener noreferrer" 
+              className="text-[10px] bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-2 py-1 rounded transition-colors"
+          >
+            View Official API Docs ↗
+          </a>
+        </div>
+        
+        {loadingDocs ? (
+          <div className="flex flex-col items-center justify-center py-6 text-sky-500/50">
+            <Loader2 className="w-6 h-6 animate-spin mb-2" />
+            <span className="text-[10px] uppercase font-bold tracking-widest">Loading knowledge base...</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-neutral-400 animate-in fade-in">
+            <div className="space-y-4">
               <div>
-                <strong className="text-white block mb-1">Spigot / Paper</strong> 
-                Server-side plugin APIs. Very popular for minigames, economy, and server logic. Does not require clients to install anything. Paper is a highly optimized fork of Spigot.
+                <strong className="text-white block mb-1">Architecture & Description</strong> 
+                {API_DOCS[framework]?.default.description}
               </div>
+              
               <div>
-                <strong className="text-white block mb-1">Forge</strong> 
-                The standard for heavy modding (new blocks, dimensions, complex machines). Requires both client and server to have the mod installed.
-              </div>
-              <div>
-                <strong className="text-white block mb-1">Fabric</strong> 
-                Lightweight, fast modding toolchain. Often updates instantly to new MC versions. Requires both client and server installations for custom items.
+                  <strong className="text-amber-400 block mb-1">V{version} Specific Highlights</strong> 
+                  <ul className="list-disc pl-4 mt-1 space-y-1 text-neutral-300 font-mono text-[10px]">
+                    {(API_DOCS[framework]?.versions[version]?.highlights || ["General engine updates apply to this version. No breaking changes logged."]).map((hl, i) => (
+                      <li key={i}>{hl}</li>
+                    ))}
+                  </ul>
               </div>
             </div>
+            
             <div>
-              <strong className="text-white block mb-1">Performance & Best Practices:</strong> 
-              <ul className="list-none space-y-2 mt-2">
-                <li className="flex gap-2"><span className="text-emerald-500">✓</span> Use asynchronous tasks for database or heavy network operations (never block the main thread).</li>
-                <li className="flex gap-2"><span className="text-emerald-500">✓</span> Listeners: Avoid expensive logic in high-frequency events like <code>PlayerMoveEvent</code>.</li>
-                <li className="flex gap-2"><span className="text-emerald-500">✓</span> Memory: Unregister listeners and tasks properly during <code>onDisable()</code> or when objects are destroyed.</li>
-                <li className="flex gap-2"><span className="text-emerald-500">✓</span> Clean Code: Use Dependency Injection and separate Data, Logic, and Listeners.</li>
+              <strong className="text-white block mb-2 text-emerald-400">Best Practices & Optimal Performance:</strong> 
+              <ul className="list-none space-y-2.5">
+                {API_DOCS[framework]?.default.guides.map((guide, i) => (
+                  <li key={i} className="flex gap-2 items-start"><span className="text-emerald-500 leading-tight">✓</span> <span className="leading-tight">{guide}</span></li>
+                ))}
+                <li className="flex gap-2 items-start"><span className="text-emerald-500 leading-tight">✓</span> <span className="leading-tight">Always handle block modifications efficiently. For Minecraft {version}, avoid generating excessive chunk updates.</span></li>
               </ul>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
-  ), [framework, version, complexity, showDocs]);
+  ), [framework, version, complexity, loadingDocs]);
 
   return (
     <GeneratorLayout
@@ -218,9 +433,44 @@ export default function ModGenerator() {
         if (isGenerating) {
           return <Loader2 className="w-8 h-8 animate-spin text-sky-500 mx-auto mt-20" />;
         }
-        return <CodeView code={result} language="java" />;
+        return <OutputWrapper result={result} onDownload={() => handleDownloadJar(result)} />;
       }}
     />
+  );
+}
+
+function OutputWrapper({ result, onDownload }: { result: string, onDownload: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(result);
+    setCopied(true);
+    toast.success("Código Copiado", { description: "Buffer transferido para o clipboard." });
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="relative group">
+      <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all z-10">
+        <button
+          onClick={handleCopy}
+          className={cn(
+            "bg-neutral-900/80 backdrop-blur-sm text-neutral-300 border border-neutral-800 hover:border-emerald-500/50 px-3 py-1.5 rounded text-[10px] uppercase font-bold tracking-widest flex items-center gap-2 transition-all",
+            copied && "text-emerald-400 border-emerald-500/50 bg-emerald-500/10"
+          )}
+        >
+          {copied ? "Copiado!" : "Copiar"}
+        </button>
+        <button
+           onClick={onDownload}
+           className="bg-sky-500/20 text-sky-400 border border-sky-500/50 hover:bg-sky-500/30 px-3 py-1.5 rounded text-[10px] uppercase font-bold tracking-widest flex items-center gap-2 transition-all"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Download .jar
+        </button>
+      </div>
+      <CodeView code={result} language="java" />
+    </div>
   );
 }
 

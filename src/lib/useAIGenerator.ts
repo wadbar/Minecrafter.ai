@@ -27,7 +27,7 @@ export function useAIGenerator(options: AIGeneratorOptions) {
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      console.log("Matrix Socket Established:", socket.id);
+      console.log("Subsystem Socket Established:", socket.id);
       socket.emit("generate-stream", {
         endpointType: options.endpointType,
         ...payload,
@@ -52,8 +52,8 @@ export function useAIGenerator(options: AIGeneratorOptions) {
     });
 
     socket.on("connect_error", (err) => {
-      console.error("Matrix Socket Connection Error:", err);
-      setError("Falha de conexão com a Omni-Matrix.");
+      console.error("Subsystem Socket Connection Error:", err);
+      setError("Falha de conexão com a infraestrutura principal.");
       setIsGenerating(false);
       if (options.onError) options.onError(err);
       socket.disconnect();

@@ -63,9 +63,12 @@ export default function TextureGenerator() {
   const controls = useMemo(() => (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-4 text-neutral-400 font-mono text-xs">
-        <div className="flex items-center gap-2">
+        <div 
+          className="flex items-center gap-2 cursor-help"
+          title="Define a resolução da textura. Resoluções menores (16x16) favorecem Pixel Art, enquanto valores maiores geram estilos detalhados/realistas."
+        >
           <Maximize className="w-4 h-4 text-emerald-500" />
-          <span className="uppercase tracking-widest font-bold">Res:</span>
+          <span className="uppercase tracking-widest font-bold border-b border-dashed border-emerald-500/50 pb-0.5">Res:</span>
         </div>
         <div className="flex flex-wrap gap-2">
           {RESOLUTION_PRESETS.map((p) => (
@@ -119,9 +122,12 @@ export default function TextureGenerator() {
       </div>
 
       <div className="flex flex-wrap items-center gap-4 text-neutral-400 font-mono text-xs mt-1">
-        <div className="flex items-center gap-2">
+        <div 
+          className="flex items-center gap-2 cursor-help"
+          title="Proporções da imagem gerada. 1:1 é perfeito para blocos. Formatos verticais (ex: 9:16) ou horizontais servem para itens alongados."
+        >
           <Layout className="w-4 h-4 text-sky-500" />
-          <span className="uppercase tracking-widest font-bold">Aspect:</span>
+          <span className="uppercase tracking-widest font-bold border-b border-dashed border-sky-500/50 pb-0.5">Aspect:</span>
         </div>
         <div className="flex gap-2">
           {ASPECT_RATIOS.map((ar) => (
@@ -295,7 +301,7 @@ export default function TextureGenerator() {
           <div className="inline-flex items-center justify-center p-3 bg-neutral-900 rounded-2xl mb-2">
             <ImageIcon className="w-6 h-6 text-neutral-500" />
           </div>
-          <h3 className="text-neutral-300 font-bold tracking-tight">Texture Matrix Ready</h3>
+          <h3 className="text-neutral-300 font-bold tracking-tight">Texture Engine Ready</h3>
           <p className="text-neutral-500 text-xs max-w-sm font-medium">
             Select your resolution and aspect ratio above, or get inspired by the generation examples below.
           </p>
@@ -306,6 +312,7 @@ export default function TextureGenerator() {
               <button 
                 onClick={() => scroll('left')}
                 className="p-2 bg-neutral-900 border border-neutral-800 rounded-full text-white hover:bg-neutral-800 hover:border-emerald-500/50 shadow-xl"
+                title="Rolar galeria de exemplos para a esquerda"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
@@ -315,6 +322,7 @@ export default function TextureGenerator() {
               <button 
                 onClick={() => scroll('right')}
                 className="p-2 bg-neutral-900 border border-neutral-800 rounded-full text-white hover:bg-neutral-800 hover:border-emerald-500/50 shadow-xl"
+                title="Rolar galeria de exemplos para a direita"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>

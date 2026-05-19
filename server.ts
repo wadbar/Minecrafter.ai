@@ -16,6 +16,7 @@ import { Server as SocketIOServer } from "socket.io";
 // New modules
 import { logger } from "./src/server/infrastructure/Logger";
 import { aiService, fastAiService } from "./src/server/services/AIService";
+import { minecraftService } from "./src/server/services/MinecraftService";
 import { telemetryMiddleware } from "./src/server/middleware/telemetry";
 
 dotenv.config();
@@ -25,6 +26,30 @@ dotenv.config();
 // ==========================================
 const PORT = 3000;
 const IS_PROD = process.env.NODE_ENV === "production";
+
+/**
+ * Memory Monitor (The Guardian)
+ * Tracks memory utilization to prevent leaks in long-running processes.
+ */
+class MemoryMonitor {
+  private static MAX_THRESHOLD = 0.85; // 85% of total heap
+
+  static audit() {
+    const memory = process.memoryUsage();
+    const ratio = memory.heapUsed / memory.heapTotal;
+    
+    if (ratio > this.MAX_THRESHOLD) {
+      logger.warn(`HIGH_MEMORY_PRESSURE: ${Math.round(ratio * 100)}%. Clearing buildCache.`);
+      buildCache.clear();
+    }
+    
+    return {
+      used: `${Math.round(memory.heapUsed / 1024 / 1024)}MB`,
+      total: `${Math.round(memory.heapTotal / 1024 / 1024)}MB`,
+      load: `${Math.round(ratio * 100)}%`
+    };
+  }
+}
 
 // Cache In-Memory LRU (Shared between REST and WS)
 export const buildCache = new LRUCache<string, any>({
@@ -48,7 +73,7 @@ app.use(cors({
     if (!IS_PROD || !origin || origin.includes("run.app") || origin.includes("minecrafter.ai")) {
       callback(null, true);
     } else {
-      callback(new Error("CORS Blocked by Matrix Security"));
+      callback(new Error("CORS Blocked by Security Subsystem"));
     }
   },
   methods: ["GET", "POST"]
@@ -72,15 +97,15 @@ app.use("/api/", apiLimiter);
 app.use(express.json({ limit: "10mb" })); // Slightly increased for complex blueprints
 
 // ==========================================
-// 3. API DOCUMENTATION (SWAGGER CORE)
+// 3. API DOCUMENTATION (SPECIFICATION CORE)
 // ==========================================
 const swaggerOptions = {
   definition: {
     openapi: "3.0.0",
     info: {
-      title: "MINECRAFTER.AI OMNI-API",
-      version: "3.0.0",
-      description: "Enterprise Generation Matrix for Minecraft Ecosystem.",
+      title: "PAPERCREEPER SERVICE API",
+      version: "9.5.0",
+      description: "Advanced Logic Execution Layer for Minecraft Ecosystem.",
     },
   },
   apis: ["./server.ts"],
@@ -119,18 +144,33 @@ const EditSchema = z.object({
  *     summary: AI Mod Generation
  */
 app.post("/api/generate-mod", validateBody(CommonSchema), async (req, res) => {
-  const result = await aiService.generate(`Expert Minecraft ${req.body.type} developer task: ${req.body.prompt}. Apply SOLID and Clean Code. Return ONLY code.`);
-  res.json({ result, traceId: (req as any).traceId });
+  try {
+    const result = await aiService.generate(`Expert Minecraft ${req.body.type} developer task: ${req.body.prompt}. Apply SOLID and Clean Code. Return ONLY code.`);
+    res.json({ result, traceId: (req as any).traceId });
+  } catch (err: any) {
+    logger.error("MOD_GEN_FAILURE", err);
+    res.status(500).json({ error: "Execution error during mod synthesis.", traceId: (req as any).traceId });
+  }
 });
 
 app.post("/api/edit-mod", validateBody(EditSchema), async (req, res) => {
-  const result = await aiService.generate(`Optimize/Localize to ${req.body.targetLanguage}: ${req.body.prompt}. Code: ${req.body.existingData}`);
-  res.json({ result, traceId: (req as any).traceId });
+  try {
+    const result = await aiService.generate(`Optimize/Localize to ${req.body.targetLanguage}: ${req.body.prompt}. Code: ${req.body.existingData}`);
+    res.json({ result, traceId: (req as any).traceId });
+  } catch (err: any) {
+    logger.error("MOD_EDIT_FAILURE", err);
+    res.status(500).json({ error: "Execution error during code refactoring.", traceId: (req as any).traceId });
+  }
 });
 
 app.post("/api/generate-map", validateBody(CommonSchema), async (req, res) => {
-  const result = await aiService.generate(`Minecraft Map Architect task: ${req.body.prompt}. Return commands or datapack logic.`);
-  res.json({ result, traceId: (req as any).traceId });
+  try {
+    const result = await aiService.generate(`Minecraft Map Architect task: ${req.body.prompt}. Return commands or datapack logic.`);
+    res.json({ result, traceId: (req as any).traceId });
+  } catch (err: any) {
+    logger.error("MAP_GEN_FAILURE", err);
+    res.status(500).json({ error: "Execution error during world synthesis.", traceId: (req as any).traceId });
+  }
 });
 
 app.post("/api/edit-map", validateBody(EditSchema), async (req, res) => {
@@ -177,6 +217,33 @@ app.post("/api/generate-skin", validateBody(CommonSchema), async (req, res) => {
   res.json({ result, traceId: (req as any).traceId });
 });
 
+const DeploySchema = z.object({
+  host: z.string(),
+  port: z.number().int().default(25565),
+  username: z.string().min(3),
+  password: z.string().optional(),
+  auth: z.enum(["mojang", "microsoft", "offline"]).default("offline"),
+  commands: z.array(z.string()),
+});
+
+/**
+ * @swagger
+ * /api/deploy-to-minecraft:
+ *   post:
+ *     summary: Live In-Game Deployment
+ *     description: Directly execute generated commands on a remote Minecraft server.
+ */
+app.post("/api/deploy-to-minecraft", validateBody(DeploySchema), async (req, res) => {
+  try {
+    const { host, port, username, password, auth, commands } = req.body;
+    const result = await minecraftService.executeCommands({ host, port, username, password, auth }, commands);
+    res.json({ ...result, traceId: (req as any).traceId });
+  } catch (err: any) {
+    logger.error("DEPLOYMENT_INTERFACE_FAILED", err);
+    res.status(500).json({ error: "Ocorreu uma falha crítica no enlace de implantação.", traceId: (req as any).traceId });
+  }
+});
+
 // Build Pipeline Tracking
 app.post("/api/build-pipeline", (req, res) => {
   const { artifactId } = req.body;
@@ -190,14 +257,15 @@ app.get("/api/build-status/:id", (req, res) => {
 });
 
 app.get("/api/health", (req, res) => {
+  const memoryStats = MemoryMonitor.audit();
   res.json({
-    status: "UP",
+    status: "ACTIVE",
     uptime: process.uptime(),
-    memory: process.memoryUsage(),
+    memory: memoryStats,
     cache: { size: buildCache.size },
     circuits: {
-      geminiPro: (aiService as any).circuitBreaker.getState(),
-      geminiFlash: (fastAiService as any).circuitBreaker.getState()
+      pro: (aiService as any).circuitBreaker.getState(),
+      flash: (fastAiService as any).circuitBreaker.getState()
     },
     traceId: (req as any).traceId
   });
@@ -230,20 +298,23 @@ Code Context:
 \`\`\`
 ${existingData}
 \`\`\`
-EXECUTION:
+EXECUTION (APPLY 2024 OPTIMIZATION BEST PRACTICES):
 1. Reduce cyclomatic complexity.
-2. Eliminate redundant I/O.
+2. Eliminate redundant I/O and synchronous database calls.
 3. Harden security (Input validation).
 4. Apply SOLID & Clean Architecture.
-5. Translate and localize all user-facing strings strictly to ${targetLanguage || "pt-BR"}.
+5. Prevent memory leaks (avoid lingering event listeners).
+6. Translate and localize all user-facing strings strictly to ${targetLanguage || "pt-BR"}.
 Return ONLY valid code.`;
         } else if (endpointType === "generate-mod") {
           finalPrompt = `# ROLE: LEAD ARCHITECT (NEXUS MATRIX)
 Task: Generate high-performance Minecraft ${data.type || "Code"}: "${prompt}".
-SPECS: 
+SPECS (2024 OPTIMIZATION STANDARDS): 
 - Framework: Forge/Fabric/Paper (Auto-detect from prompt).
-- Pattern: Enterprise Logic.
+- Pattern: Enterprise Logic, Modularity, and Decoupled Services.
 - Optimization: O(n) reduction, memory leakage protection.
+- Threading: Ensure database and I/O tasks are executed asynchronously (e.g. BukkitRunnable/Async).
+- Event Handling: Never block the main Server thread.
 - Documentation: Javadoc/TSDoc header included.
 Return ONLY valid, compilation-ready code block.`;
         } else if (endpointType === "generate-map") {
@@ -316,7 +387,10 @@ REQUIREMENTS:
 
   // Graceful Shutdown & Recovery
   const serverInstance = httpServer.listen(PORT, "0.0.0.0", () => {
-    logger.info(`[SYSTEM-RESTORED] Omni-Matrix operating on port ${PORT}`);
+    logger.info(`[SYSTEM-RESTORED] Architecture operating on port ${PORT}`);
+    
+    // Interval Memory Leak Protection
+    setInterval(() => MemoryMonitor.audit(), 60000);
   });
 
   const stop = () => {
@@ -338,8 +412,16 @@ REQUIREMENTS:
 
 // Global Exception Barrier
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  logger.error("UNHANDLED_EXCEPTION", err, { path: req.path });
-  res.status(500).json({ error: "Interstellar failure. Matrix destabilized.", traceId: (req as any).traceId });
+  logger.error("CRITICAL_RUNTIME_FAILURE", { 
+    path: req.path, 
+    error: err.message, 
+    stack: IS_PROD ? undefined : err.stack 
+  });
+  res.status(500).json({ 
+    error: "Subsystem unavailable. Execution cycle aborted.", 
+    code: "UNCAUGHT_EXCEPTION",
+    traceId: (req as any).traceId 
+  });
 });
 
 startServer().catch(err => {

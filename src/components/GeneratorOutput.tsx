@@ -36,7 +36,7 @@ export default function GeneratorOutput({
          <div className="flex items-center gap-4 text-[9px] font-mono text-neutral-600 uppercase tracking-widest">
             <div className="flex items-center gap-1.5">
                <div className={cn("w-1.5 h-1.5 rounded-full", isBusy ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-neutral-800")} />
-               Matrix_Stream: {isBusy ? "Active" : "Idle"}
+               System_Stream: {isBusy ? "Active" : "Idle"}
             </div>
             {activeResult && <div className="hidden lg:block italic">Payload_Size: {(new TextEncoder().encode(activeResult).length / 1024).toFixed(1)}KB</div>}
          </div>
@@ -57,7 +57,7 @@ export default function GeneratorOutput({
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = `matrix-artifact-${Date.now()}.txt`;
+                  a.download = `builder-artifact-${Date.now()}.txt`;
                   a.click();
                   URL.revokeObjectURL(url);
                   toast.success("Artifact downloaded successfully.");
@@ -68,17 +68,17 @@ export default function GeneratorOutput({
               </button>
              {onSaveCloud && (
               <button
-                data-matrix-action="save"
+                data-action="save"
                 onClick={async () => {
                   if (!user) {
-                    toast.info("Security Barrier", { description: "Authenticate via Identity Provider to enable Cloud Vault features." });
+                    toast.info("Authentication Required", { description: "Sign in to enable Cloud Vault features." });
                     await signIn();
                     return;
                   }
                   setIsSaving(true);
                   try {
                     await onSaveCloud(getCurrentPrompt().slice(0, 50) || "Geração", activeResult);
-                    toast.success("Artifact stored in Matrix Vault.");
+                    toast.success("Artifact stored in Cloud Vault.");
                   } catch (err: any) {
                     toast.error("Vault Failure", { description: err.message });
                   } finally {
@@ -89,7 +89,7 @@ export default function GeneratorOutput({
                 className="flex items-center gap-2 h-6 px-3 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 rounded-md border border-emerald-500/20 text-[9px] font-mono font-bold uppercase tracking-wider transition-all"
               >
                 {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CloudUpload className="w-3 h-3" />}
-                {user ? "Store_Vault" : "Auth_Identity"}
+                {user ? "Store_Cloud" : "Login"}
               </button>
              )}
            </div>
@@ -104,7 +104,7 @@ export default function GeneratorOutput({
                 <div key={i} className={cn("p-6 rounded-2xl border font-mono text-xs", msg.role === "user" ? "bg-neutral-900/30 border-neutral-800 ml-12 text-neutral-400" : "bg-neutral-950 border-neutral-900 mr-12 text-neutral-300")}>
                     <div className="flex items-center gap-2 mb-4 opacity-50">
                        <div className={cn("w-1.5 h-1.5 rounded-full", msg.role === "user" ? "bg-blue-500" : "bg-emerald-500")} />
-                       <span className="uppercase tracking-widest font-bold">{msg.role === "user" ? "Input_Archive" : "Matrix_Response"}</span>
+                       <span className="uppercase tracking-widest font-bold">{msg.role === "user" ? "Input_Archive" : "System_Response"}</span>
                     </div>
                     <div className="prose prose-invert prose-xs max-w-none">
                       <Markdown>{msg.parts[0].text}</Markdown>
@@ -120,9 +120,9 @@ export default function GeneratorOutput({
                    <Loader2 className={cn("w-10 h-10 animate-spin", mode === "edit" ? "text-sky-500" : "text-emerald-500")} />
                    <div className="text-center space-y-1">
                      <p className={cn("text-[10px] uppercase font-mono tracking-widest font-bold", mode === "edit" ? "text-sky-400" : "text-emerald-500")}>
-                       {mode === "edit" ? "Refactoring_Structural_Matrix" : "Synthesizing_Procedural_Assets"}
+                       {mode === "edit" ? "Refactoring_Structural_Logic" : "Synthesizing_Procedural_Assets"}
                      </p>
-                     <p className="text-[9px] text-neutral-600 font-mono italic">Initiating neural collapse chain...</p>
+                     <p className="text-[9px] text-neutral-600 font-mono italic">Initiating generation...</p>
                    </div>
                  </div>
                  )

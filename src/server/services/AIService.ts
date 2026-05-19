@@ -54,7 +54,9 @@ export class AIService {
         model: this.modelName,
         contents: contents as any,
         config: {
-          temperature: 0.3
+          temperature: 0.05,
+          topP: 0.99,
+          maxOutputTokens: 2048,
         }
       });
       return response.text || "";
@@ -74,7 +76,9 @@ export class AIService {
         model: this.modelName,
         contents: contents as any,
         config: {
-          temperature: 0.3
+          temperature: 0.05,
+          topP: 0.99,
+          maxOutputTokens: 2048,
         }
       });
       

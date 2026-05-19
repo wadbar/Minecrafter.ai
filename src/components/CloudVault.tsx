@@ -69,7 +69,7 @@ export default function CloudVault() {
   const handleTriggerBuild = async (art: Artifact) => {
     setIsCompiling(true);
     setBuildStatus("QUEUED");
-    toast.info("Pipeline_Ingress_Signal", { description: "Allocating matrix compute cluster..." });
+    toast.info("Build_Trigger_Signal", { description: "Allocating build resources..." });
 
     try {
       const res = await fetch("/api/build-pipeline", {
@@ -119,7 +119,7 @@ export default function CloudVault() {
       await deleteDoc(doc(db, "artifacts", art.id));
       setArtifacts(prev => prev.filter(a => a.id !== art.id));
       if (selectedArtifact?.id === art.id) setSelectedArtifact(null);
-      toast.success("Artifact purged from Matrix.");
+      toast.success("Artifact purged from Architecture.");
     } catch (err: any) {
       toast.error("Purge Failure", { description: err.message });
     }
@@ -134,7 +134,7 @@ export default function CloudVault() {
         <div className="space-y-2">
           <h2 className="text-3xl font-bold text-white tracking-tighter">Vault_Offline</h2>
           <p className="text-neutral-500 max-w-sm mx-auto font-medium">
-            Authenticate via Matrix-ID to access the global resillient artifact registry.
+            Authenticate via ID to access the global robust artifact registry.
           </p>
         </div>
         <button onClick={signIn} className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-white font-bold text-xs uppercase tracking-widest transition-all shadow-xl active:scale-95">

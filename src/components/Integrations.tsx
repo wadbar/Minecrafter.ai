@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plug, Download, Server, Key, FileJson, ShoppingBag, CheckCircle, Loader2 } from "lucide-react";
+import { Plug, Download, Server, Key, FileJson, ShoppingBag, CheckCircle, Loader2, Cpu, Zap } from "lucide-react";
 import { cn } from "../lib/utils";
 import { toast } from "sonner";
 import JSZip from "jszip";
@@ -27,10 +27,111 @@ export default function Integrations() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <ServerIntegrationPanel />
+        <EnvironmentIntegrationPanel />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <BedrockStorePanel />
+        <LinuxAuditPanel />
       </div>
 
       <UniversalPacker />
+    </div>
+  );
+}
+
+function EnvironmentIntegrationPanel() {
+  const [activeEnv, setActiveEnv] = useState("WSL2");
+
+  const envs = [
+    { id: "WSL2", label: "WSL2 (Windows)", icon: Cpu, status: "Active" },
+    { id: "VPS", label: "Ubuntu VPS", icon: Server, status: "Connected" },
+    { id: "TERMUX", label: "Termux Mobile", icon: Zap, status: "Isolated" },
+  ];
+
+  return (
+    <div className="bg-neutral-900 border border-neutral-800 rounded-[2.5rem] p-10 relative overflow-hidden group">
+      <div className="relative space-y-8">
+        <div className="flex items-center justify-between">
+          <h3 className="text-2xl font-black text-white uppercase tracking-tight">Runtime_Subsystems</h3>
+          <div className="p-2 bg-neutral-950 border border-neutral-800 rounded-lg">
+             <Cpu className="w-5 h-5 text-sky-500" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3">
+          {envs.map(env => (
+            <button
+              key={env.id}
+              onClick={() => setActiveEnv(env.id)}
+              className={cn(
+                "flex items-center justify-between p-5 rounded-2xl border transition-all active:scale-[0.98]",
+                activeEnv === env.id 
+                  ? "bg-sky-500/10 border-sky-500/50" 
+                  : "bg-neutral-950 border-neutral-800 hover:border-neutral-700"
+              )}
+            >
+              <div className="flex items-center gap-4">
+                <div className={cn("p-2 rounded-lg", activeEnv === env.id ? "bg-sky-500/20 text-sky-400" : "bg-neutral-900 text-neutral-600")}>
+                  <env.icon className="w-4 h-4" />
+                </div>
+                <div className="text-left">
+                  <div className={cn("text-xs font-bold uppercase tracking-widest", activeEnv === env.id ? "text-white" : "text-neutral-500")}>
+                    {env.label}
+                  </div>
+                  <div className="text-[9px] font-mono text-neutral-600 uppercase font-black tracking-widest mt-0.5">
+                    ID: {env.id}_NODE_ENV
+                  </div>
+                </div>
+              </div>
+              <div className={cn("text-[9px] font-black uppercase tracking-widest italic", activeEnv === env.id ? "text-sky-500" : "text-neutral-700")}>
+                {env.status}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LinuxAuditPanel() {
+  const audits = [
+    { label: "Bash/Setup.sh Integrity", status: "VERIFIED", score: 100 },
+    { label: "Port 3000 Ingress", status: "READY", score: 100 },
+    { label: "Node.js VM Isolation", status: "ACTIVE", score: 94 },
+    { label: "Paper/Spigot Memory Management", status: "OPTIMIZED", score: 88 },
+  ];
+
+  return (
+    <div className="bg-neutral-900 border border-neutral-800 rounded-[2.5rem] p-10 relative overflow-hidden group">
+      <div className="relative space-y-8">
+        <h3 className="text-2xl font-black text-white uppercase tracking-tight">SRE_Environment_Audit</h3>
+        
+        <div className="space-y-4">
+          {audits.map(audit => (
+            <div key={audit.label} className="space-y-2">
+              <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
+                <span className="text-neutral-500">{audit.label}</span>
+                <span className="text-emerald-500 font-black italic">{audit.status}</span>
+              </div>
+              <div className="h-1.5 w-full bg-neutral-950 rounded-full overflow-hidden border border-neutral-800">
+                <div 
+                  className={cn("h-full transition-all duration-1000", audit.score > 90 ? "bg-emerald-500" : "bg-sky-500")}
+                  style={{ width: `${audit.score}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        <div className="pt-4 mt-4 border-t border-neutral-800">
+          <p className="text-[9px] font-mono text-neutral-600 uppercase leading-relaxed">
+            Audit_Hash: <span className="text-neutral-500 underline underline-offset-2">0x9F_PA_CREE_V9</span><br/>
+            Engine: Architecture Sentinel Analysis Layer
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -42,7 +143,7 @@ function ServerIntegrationPanel() {
     setIsConnecting(true);
     setTimeout(() => {
       setIsConnecting(false);
-      toast.error("Handshake Rejeitado", { description: "Protocolo 403: Matrix Firewall negou a conexão externa." });
+      toast.error("Handshake Rejeitado", { description: "Protocolo 403: System Firewall negou a conexão externa." });
     }, 1500);
   };
 
@@ -70,7 +171,7 @@ function ServerIntegrationPanel() {
 
         <div className="space-y-6">
            <div className="space-y-3">
-             <label className="block text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] ml-1">Matrix_Access_Token</label>
+             <label className="block text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] ml-1">System_Access_Token</label>
              <div className="flex gap-3">
                <div className="flex-1 relative">
                  <input
