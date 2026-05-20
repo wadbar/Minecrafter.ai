@@ -1,10 +1,11 @@
 import React, { useCallback, useState, useMemo, useRef } from "react";
 import GeneratorLayout from "./GeneratorLayout";
 import { OfflineEngine } from "../services/OfflineEngine";
-import { Loader2, Zap, Layers, Globe, Database, Map as MapIcon, Link, Server, Shield, Send, RotateCcw, RotateCw, Download, Cloud } from "lucide-react";
+import { Loader2, Zap, Layers, Globe, Database, Map as MapIcon, Link, Server, Shield, Send, RotateCcw, RotateCw, Download, Cloud, History, Trash2 } from "lucide-react";
 import { saveArtifact } from "../lib/db";
 import { cn } from "../lib/utils";
 import { toast } from "sonner";
+import { usePersistentHistory } from "../hooks/usePersistentHistory";
 
 class LRUCache<K, V> {
   private max: number;
@@ -125,6 +126,8 @@ const TERRAIN_PRESETS = [
 ];
 
 export default function MapGenerator() {
+  const { history, addHistory, removeHistory } = usePersistentHistory('map', 15);
+  const [activeTab, setActiveTab] = useState<"manifest" | "history">("manifest");
   const [engine, setEngine] = useState("worldedit");
   const [version, setVersion] = useState("1.21+");
   const [activePreset, setActivePreset] = useState("");
@@ -135,34 +138,7 @@ export default function MapGenerator() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showDeployment, setShowDeployment] = useState(false);
   const [deployLoading, setDeployLoading] = useState(false);
-  
-  const [undoStack, setUndoStack] = useState<string[]>([]);
-  const [redoStack, setRedoStack] = useState<string[]>([]);
   const [currentResult, setCurrentResult] = useState("");
-
-  const onGenerateComplete = useCallback((result: string) => {
-    if (currentResult) {
-      setUndoStack(prev => [currentResult, ...prev].slice(0, 20));
-    }
-    setRedoStack([]);
-    setCurrentResult(result);
-  }, [currentResult]);
-
-  const undo = useCallback(() => {
-    if (undoStack.length === 0) return;
-    const prev = undoStack[0];
-    setRedoStack(r => [currentResult, ...r]);
-    setCurrentResult(prev);
-    setUndoStack(u => u.slice(1));
-  }, [currentResult, undoStack]);
-
-  const redo = useCallback(() => {
-    if (redoStack.length === 0) return;
-    const next = redoStack[0];
-    setUndoStack(u => [currentResult, ...u]);
-    setCurrentResult(next);
-    setRedoStack(r => r.slice(1));
-  }, [currentResult, redoStack]);
 
   const [deployConfig, setDeployConfig] = useState(() => {
     const saved = localStorage.getItem("mc_global_config");
@@ -337,6 +313,7 @@ export default function MapGenerator() {
            }));
          }
          setIsProcessing(false);
+         addHistory(prompt, result, { engine, version, complexity, density, verticality, activePreset });
          setCurrentResult(result);
          return result;
        }
@@ -355,6 +332,7 @@ export default function MapGenerator() {
        }
 
        setIsProcessing(false);
+       addHistory(prompt, data.result, { engine, version, complexity, density, verticality, activePreset });
        setCurrentResult(data.result);
        return data.result;
      } catch (error: any) {
@@ -366,7 +344,7 @@ export default function MapGenerator() {
        }));
        throw error;
      }
-  }, [engine, version, isProcessing, activePreset, complexity, density, verticality]);
+  }, [engine, version, isProcessing, activePreset, complexity, density, verticality, addHistory]);
 
   const handleDeploy = async () => {
     if (!currentResult) {
@@ -412,19 +390,19 @@ export default function MapGenerator() {
   };
 
   const extraControls = useMemo(() => (
-    <div className="flex flex-col w-full gap-2 text-neutral-400 font-mono text-[10px]">
+    <div className="flex flex-col w-full gap-3 text-m3-on-surface-variant font-mono text-[11px]">
       <div className="flex flex-wrap items-center gap-4">
-         <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800">
-           <Zap className="w-3 h-3 text-amber-500" />
-           <span className="font-bold uppercase tracking-widest text-neutral-500">Engine</span>
-           <div className="flex gap-1 ml-2">
+         <div className="flex items-center gap-2 bg-m3-surface-container-low px-4 py-2 rounded-full border border-m3-outline-variant shadow-m3-1 text-[10px]">
+           <Zap className="w-3.5 h-3.5 text-m3-secondary" />
+           <span className="font-black uppercase tracking-widest opacity-50 text-m3-on-surface-variant">Motor</span>
+           <div className="flex gap-1 ml-1.5">
               {ENGINES.map(eg => (
                 <button 
                   key={eg.id}
                   onClick={() => setEngine(eg.id)}
                   className={cn(
-                    "px-2 py-1 rounded transition-all",
-                    engine === eg.id ? "bg-amber-500/20 text-amber-500 border border-amber-500/30" : "hover:text-white"
+                    "px-2.5 py-0.5 rounded-full transition-all font-bold",
+                    engine === eg.id ? "bg-m3-primary text-m3-on-primary shadow-m3-1" : "hover:bg-m3-surface-variant"
                   )}
                 >
                   {eg.label.split(" ")[0]}
@@ -433,130 +411,109 @@ export default function MapGenerator() {
            </div>
          </div>
 
-         <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800">
-           <MapIcon className="w-3 h-3 text-emerald-500" />
-           <span className="font-bold uppercase tracking-widest text-neutral-500">Preset</span>
+         <div className="flex items-center gap-2 bg-m3-surface-container-low px-4 py-2 rounded-full border border-m3-outline-variant shadow-m3-1 text-[10px]">
+           <MapIcon className="w-3.5 h-3.5 text-m3-primary" />
+           <span className="font-black uppercase tracking-widest opacity-50 text-m3-on-surface-variant">Cenário</span>
            <select 
              value={activePreset}
              onChange={(e) => selectPreset(e.target.value)}
-             className="bg-transparent outline-none text-emerald-400 font-bold ml-2 cursor-pointer"
+             className="bg-transparent outline-none text-m3-primary font-black ml-1.5 cursor-pointer appearance-none"
            >
-             <option value="" disabled className="bg-neutral-950">Select Terrain...</option>
+             <option value="" disabled className="bg-m3-surface-container">Selecionar...</option>
              {TERRAIN_PRESETS.map(p => (
-               <option key={p.id} value={p.id} className="bg-neutral-950">{p.label}</option>
+               <option key={p.id} value={p.id} className="bg-m3-surface-container">{p.label}</option>
              ))}
            </select>
          </div>
 
-         <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800">
-           <Globe className="w-3 h-3 text-sky-500" />
-           <span className="font-bold uppercase tracking-widest text-neutral-500">Manifest</span>
+         <div className="flex items-center gap-2 bg-m3-surface-container-low px-4 py-2 rounded-full border border-m3-outline-variant shadow-m3-1 text-[10px]">
+           <Globe className="w-3.5 h-3.5 text-m3-secondary" />
+           <span className="font-black uppercase tracking-widest opacity-50 text-m3-on-surface-variant">Versão</span>
            <select 
              value={version}
              onChange={(e) => setVersion(e.target.value)}
-             className="bg-transparent outline-none text-sky-400 font-bold ml-2 cursor-pointer"
+             className="bg-transparent outline-none text-m3-secondary font-black ml-1.5 cursor-pointer appearance-none"
            >
-             {VERSIONS.map(v => <option key={v} value={v} className="bg-neutral-950">{v}</option>)}
+             {VERSIONS.map(v => <option key={v} value={v} className="bg-m3-surface-container">{v}</option>)}
            </select>
          </div>
 
          {currentResult && (
-           <div className="ml-auto flex items-center gap-2 bg-neutral-900 px-2 py-1.5 rounded-lg border border-neutral-800">
-              <button 
-                onClick={undo} disabled={undoStack.length === 0} 
-                className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors"
-                title="Undo Generation"
-              >
-                <RotateCcw className="w-3 h-3" />
-              </button>
-              <button 
-                onClick={redo} disabled={redoStack.length === 0} 
-                className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors"
-                title="Redo Generation"
-              >
-                <RotateCw className="w-3 h-3" />
-              </button>
-              <div className="w-px h-3 bg-neutral-800 mx-1" />
+           <div className="ml-auto flex items-center gap-2 bg-m3-surface-container-high px-2 py-1.5 rounded-full border border-m3-outline-variant shadow-m3-1">
               <button 
                 onClick={() => copyToClipboard(currentResult)}
-                className="p-1 text-emerald-500 hover:text-emerald-400 transition-colors"
-                title="Copy Commands"
+                className="p-1.5 text-m3-primary hover:bg-m3-primary/10 rounded-full transition-all"
+                title="Copiar Comandos"
               >
-                <Send className="w-3 h-3" />
+                <Send className="w-4 h-4" />
               </button>
            </div>
          )}
       </div>
 
       {/* Advanced Generation Controls */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2 bg-neutral-900/30 p-2 rounded-lg border border-neutral-800/50">
-          <div className="flex flex-col gap-1 px-2">
-            <div className="flex justify-between items-center px-1">
-              <span className="uppercase font-bold tracking-tighter text-neutral-500 text-[9px]">Structural Complexity</span>
-              <span className="text-emerald-500 text-[9px] font-bold">{complexity}%</span>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-3 bg-m3-surface-container-highest/30 p-5 rounded-3xl border border-m3-outline-variant/50">
+          {[
+            { label: "Complexidade Estrutural", val: complexity, set: setComplexity, color: "text-m3-primary" },
+            { label: "Densidade Atmosférica", val: density, set: setDensity, color: "text-m3-secondary" },
+            { label: "Viés Vertical", val: verticality, set: setVerticality, color: "text-m3-primary" }
+          ].map((slider, idx) => (
+            <div key={idx} className={cn("flex flex-col gap-2", idx === 1 && "md:border-x border-m3-outline-variant/30 md:px-6")}>
+              <div className="flex justify-between items-center px-1">
+                <span className="uppercase font-black tracking-widest text-m3-on-surface-variant opacity-60 text-[9px]">{slider.label}</span>
+                <span className={cn("text-[10px] font-black", slider.color)}>{slider.val}%</span>
+              </div>
+              <input 
+                type="range" min="0" max="100" value={slider.val} 
+                onChange={(e) => slider.set(parseInt(e.target.value))}
+                className="w-full h-1.5 bg-m3-surface-container rounded-full appearance-none cursor-pointer accent-m3-primary"
+              />
             </div>
-            <input 
-              type="range" min="0" max="100" value={complexity} 
-              onChange={(e) => setComplexity(parseInt(e.target.value))}
-              className="w-full h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-            />
-          </div>
-          <div className="flex flex-col gap-1 px-2 border-x border-neutral-800/50">
-            <div className="flex justify-between items-center px-1">
-              <span className="uppercase font-bold tracking-tighter text-neutral-500 text-[9px]">Atmospheric Density</span>
-              <span className="text-emerald-500 text-[9px] font-bold">{density}%</span>
-            </div>
-            <input 
-              type="range" min="0" max="100" value={density} 
-              onChange={(e) => setDensity(parseInt(e.target.value))}
-              className="w-full h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-            />
-          </div>
-          <div className="flex flex-col gap-1 px-2">
-            <div className="flex justify-between items-center px-1">
-              <span className="uppercase font-bold tracking-tighter text-neutral-500 text-[9px]">Vertical Bias</span>
-              <span className="text-emerald-500 text-[9px] font-bold">{verticality}%</span>
-            </div>
-            <input 
-              type="range" min="0" max="100" value={verticality} 
-              onChange={(e) => setVerticality(parseInt(e.target.value))}
-              className="w-full h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-            />
-          </div>
+          ))}
       </div>
       
       {/* Visualizador de Cache do Terreno */}
-      <div className="flex items-center justify-between bg-neutral-900/50 px-3 py-2 rounded-lg border border-neutral-800/80 mt-2">
-        <div className="flex items-center gap-2">
-          <Database className={cn("w-3.5 h-3.5 transition-colors", cacheStats.hits > 0 ? "text-emerald-500" : "text-neutral-500")} />
-          <span className="uppercase tracking-widest font-bold text-neutral-500">LRU Cache System</span>
+      <div className="flex items-center justify-between bg-m3-surface-container/40 p-4 rounded-3xl border border-m3-outline-variant/60 mt-3 shadow-inner">
+        <div className="flex items-center gap-3">
+          <Database className={cn("w-4 h-4 transition-colors", cacheStats.hits > 0 ? "text-m3-primary" : "text-m3-on-surface-variant/40")} />
+          <span className="uppercase tracking-[0.15em] font-black text-m3-on-surface-variant text-[9px] opacity-70">Sistema LRU Cache</span>
           
           {/* Hit History Sparkline */}
-          <div className="flex items-center gap-0.5 ml-4 h-3">
+          <div className="flex items-center gap-1 ml-4 h-4">
              {cacheStats.history.map((hit, i) => (
                <div 
                  key={i} 
                  className={cn(
-                   "w-1 h-full rounded-[1px] transition-all duration-500",
-                   hit ? "bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" : "bg-red-500/30"
+                   "w-1.5 h-full rounded-full transition-all duration-700",
+                   hit ? "bg-m3-primary shadow-m3-1" : "bg-m3-on-surface-variant/10"
                  )} 
                  style={{ height: hit ? '100%' : '40%' }}
                />
              ))}
              {cacheStats.history.length === 0 && (
-               <div className="text-[8px] text-neutral-700 italic">Awaiting operations...</div>
+               <div className="text-[9px] text-m3-on-surface-variant/40 italic">Aguardando operações...</div>
              )}
           </div>
         </div>
-        <div className="flex items-center gap-4">
-           <span className="text-neutral-400">Status: <span className={cn("font-bold", cacheStats.status.includes("Loaded") ? "text-emerald-400" : cacheStats.status.includes("Invalidate") || cacheStats.status.includes("Purge") ? "text-red-400" : "text-sky-400")}>{cacheStats.status}</span></span>
-           <span className="text-neutral-400 border-l border-neutral-800 pl-4">Size: <span className="text-emerald-400 font-bold">{cacheStats.size}/5</span></span>
-           <span className="text-neutral-400 border-l border-neutral-800 pl-4">Hits: <span className="text-emerald-400 font-bold">{cacheStats.hits}</span></span>
+        <div className="flex items-center gap-6">
+           <div className="flex flex-col items-end">
+              <span className="text-[8px] uppercase font-black opacity-40">Status_Link</span>
+              <span className={cn("font-black text-[10px]", cacheStats.status.includes("Loaded") ? "text-m3-primary" : cacheStats.status.includes("Invalidate") || cacheStats.status.includes("Purge") ? "text-m3-error" : "text-m3-secondary")}>{cacheStats.status}</span>
+           </div>
+           <div className="w-px h-6 bg-m3-outline-variant" />
+           <div className="flex flex-col items-center">
+              <span className="text-[8px] uppercase font-black opacity-40">Setores</span>
+              <span className="text-m3-on-surface font-black text-[10px]">{cacheStats.size}/5</span>
+           </div>
+           <div className="flex flex-col items-center">
+              <span className="text-[8px] uppercase font-black opacity-40">Hits</span>
+              <span className="text-m3-primary font-black text-[10px]">{cacheStats.hits}</span>
+           </div>
            <button 
              onClick={handleClearCache}
-             className="ml-2 px-2 py-0.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[8px] font-bold border border-red-500/20 rounded uppercase transition-colors"
+             className="ml-2 px-4 py-1.5 bg-m3-error-container text-m3-on-error-container text-[9px] font-black border border-m3-error/20 rounded-full uppercase transition-all hover:bg-m3-error/10 hover:border-m3-error/40 active:scale-95"
            >
-             Purge Cache
+             Purgar Cache
            </button>
         </div>
       </div>
@@ -566,107 +523,128 @@ export default function MapGenerator() {
   const renderOutput = useCallback((result: string, isGenerating: boolean) => {
     if (isGenerating) {
       return (
-        <div className="flex flex-col items-center justify-center mt-20 space-y-4">
-          <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
-          <p className="text-[10px] font-mono font-bold text-neutral-500 animate-pulse uppercase tracking-[0.3em]">{cacheStats.status}</p>
+        <div className="flex flex-col items-center justify-center mt-20 space-y-8 animate-in fade-in duration-700">
+          <div className="relative">
+            <Loader2 className="w-12 h-12 animate-spin text-m3-primary" />
+            <div className="absolute inset-0 blur-xl bg-m3-primary/20 animate-pulse" />
+          </div>
+          <p className="text-[11px] font-black text-m3-primary animate-pulse uppercase tracking-[0.4em]">{cacheStats.status}</p>
         </div>
       );
     }
     return (
-      <div className="prose prose-invert prose-emerald max-w-none p-4">
-        <div className="flex items-center justify-between mb-4 border-b border-neutral-800 pb-2">
-           <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-neutral-600 uppercase tracking-widest">
-              <Layers className="w-3 h-3" /> Structure_Manifest
-           </div>
-           <button 
-             onClick={() => copyToClipboard(result)}
-             className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-emerald-500 text-[10px] font-bold rounded-lg transition-all flex items-center gap-2 border border-emerald-500/20"
-           >
-             COPY_TO_SYSTEM
-           </button>
-           <button 
-             onClick={() => setShowDeployment(!showDeployment)}
-             className={cn(
-               "px-3 py-1 text-[10px] font-bold rounded-lg transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)] border",
-               showDeployment ? "bg-emerald-500 text-neutral-950 border-emerald-400" : "bg-neutral-950 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10"
-             )}
-           >
-             <Link className="w-3 h-3" />
-             DIRECT_IN_GAME
-           </button>
-        </div>
-        
-        {showDeployment && (
-          <div className="bg-neutral-900/80 backdrop-blur-xl border border-emerald-500/30 rounded-2xl p-6 mb-4 animate-in fade-in slide-in-from-top-4 duration-500">
-             <div className="flex items-center gap-3 mb-6">
-                <Server className="w-5 h-5 text-emerald-500" />
-                <h4 className="text-sm font-black text-white uppercase tracking-widest">Connect_Server_Bridge</h4>
-             </div>
-             
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest ml-1">Remote Host</label>
-                  <input 
-                    type="text" value={deployConfig.host} 
-                    onChange={e => setDeployConfig({...deployConfig, host: e.target.value})}
-                    className="w-full bg-black/40 border border-neutral-800 rounded-xl px-4 py-2.5 text-xs font-mono text-emerald-400 focus:outline-none focus:border-emerald-500/50"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest ml-1">Port</label>
-                  <input 
-                    type="number" value={deployConfig.port} 
-                    onChange={e => setDeployConfig({...deployConfig, port: parseInt(e.target.value)})}
-                    className="w-full bg-black/40 border border-neutral-800 rounded-xl px-4 py-2.5 text-xs font-mono text-emerald-400 focus:outline-none focus:border-emerald-500/50"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest ml-1">Agent Name</label>
-                  <input 
-                    type="text" value={deployConfig.username} 
-                    onChange={e => setDeployConfig({...deployConfig, username: e.target.value})}
-                    className="w-full bg-black/40 border border-neutral-800 rounded-xl px-4 py-2.5 text-xs font-mono text-emerald-400 focus:outline-none focus:border-emerald-500/50"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest ml-1">Auth Scheme</label>
-                  <select 
-                    value={deployConfig.auth} 
-                    onChange={e => setDeployConfig({...deployConfig, auth: e.target.value as any})}
-                    className="w-full bg-black/40 border border-neutral-800 rounded-xl px-4 py-2.5 text-xs font-mono text-emerald-400 focus:outline-none focus:border-emerald-500/50 appearance-none"
-                  >
-                    <option value="offline">Offline/CRACKED</option>
-                    <option value="mojang">Mojang Legacy</option>
-                    <option value="microsoft">Microsoft/OAUTH</option>
-                  </select>
-                </div>
-             </div>
+      <div className="p-8 lg:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setActiveTab("manifest")}
+                className={cn(
+                  "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all",
+                  activeTab === "manifest" ? "bg-m3-primary text-m3-on-primary shadow-m3-1" : "bg-m3-surface-container text-m3-on-surface-variant hover:bg-m3-surface-variant"
+                )}
+              >
+                Manifesto Estrutural
+              </button>
+              <button 
+                onClick={() => setActiveTab("history")}
+                className={cn(
+                  "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-2",
+                  activeTab === "history" ? "bg-m3-primary text-m3-on-primary shadow-m3-1" : "bg-m3-surface-container text-m3-on-surface-variant hover:bg-m3-surface-variant"
+                )}
+              >
+                <History className="w-3 h-3" /> Histórico ({history.length})
+              </button>
+            </div>
 
-             <div className="mt-8 flex items-center justify-between border-t border-neutral-800 pt-6">
-                <div className="flex items-center gap-4">
-                   <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/5 rounded-full border border-emerald-500/10">
-                      <Shield className="w-3 h-3 text-emerald-500" />
-                      <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Method: Automation Bot</span>
+            {activeTab === "history" && (
+              <div className="grid gap-4 animate-in fade-in slide-in-from-top-4">
+                 {history.map((item) => (
+                   <div 
+                    key={item.id} 
+                    className="flex items-center justify-between p-4 bg-m3-surface-container border border-m3-outline-variant rounded-[2rem] hover:border-m3-primary/30 transition-all cursor-pointer group"
+                    onClick={() => {
+                      setCurrentResult(item.result);
+                      if (item.parameters) {
+                        const params = item.parameters as any;
+                        setEngine(params.engine);
+                        setVersion(params.version);
+                        setComplexity(params.complexity);
+                        setDensity(params.density);
+                        setVerticality(params.verticality);
+                      }
+                      window.dispatchEvent(new CustomEvent('set-builder-prompt', { detail: item.prompt }));
+                      setActiveTab("manifest");
+                    }}
+                   >
+                     <div className="flex flex-col gap-1 pl-4">
+                        <span className="text-[9px] font-black uppercase text-m3-primary tracking-widest">{(item.parameters as any)?.engine} {(item.parameters as any)?.version}</span>
+                        <p className="text-xs text-m3-on-surface truncate max-w-xl font-mono">"{item.prompt}"</p>
+                        <span className="text-[8px] text-m3-on-surface-variant/40 font-mono italic">{new Date(item.timestamp).toLocaleString()}</span>
+                     </div>
+                     <button 
+                        onClick={(e) => { e.stopPropagation(); removeHistory(item.id); }}
+                        className="p-3 text-m3-error opacity-0 group-hover:opacity-100 transition-all hover:bg-m3-error-container rounded-full"
+                     >
+                        <Trash2 className="w-4 h-4" />
+                     </button>
                    </div>
-                   <p className="text-[9px] text-neutral-600 max-w-md leading-relaxed font-medium">
-                     * O bot se conectará brevemente ao servidor, executará os comandos e desconectará. Certifique-se de que o bot tenha permissões de OP ou permissões para os comandos especificados.
-                   </p>
+                 ))}
+                 {history.length === 0 && (
+                   <div className="py-20 text-center opacity-30 uppercase font-black tracking-widest text-xs">Sem registros históricos.</div>
+                 )}
+              </div>
+            )}
+
+            {activeTab === "manifest" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                   <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-m3-surface-container rounded-2xl flex items-center justify-center border border-m3-outline-variant shadow-m3-1">
+                        <Layers className="w-5 h-5 text-m3-primary" />
+                      </div>
+                      <div>
+                        <h4 className="text-[10px] font-black text-m3-on-surface-variant uppercase tracking-[0.2em] opacity-50">Manifesto Estrutural</h4>
+                        <div className="flex items-center gap-2">
+                           <div className="w-1.5 h-1.5 rounded-full bg-m3-primary animate-pulse" />
+                           <span className="text-[11px] font-bold text-m3-on-surface">Pronto para Injeção</span>
+                        </div>
+                      </div>
+                   </div>
+                   
+                   <div className="flex items-center gap-3">
+                     <button 
+                       onClick={() => copyToClipboard(result)}
+                       className="h-10 px-6 bg-m3-surface-container-high hover:bg-m3-surface-variant text-m3-primary text-[10px] font-black rounded-full transition-all flex items-center gap-2 shadow-m3-1 border border-m3-outline-variant"
+                     >
+                       Copiar Manifesto
+                     </button>
+                     <button 
+                       onClick={() => setShowDeployment(!showDeployment)}
+                       className={cn(
+                         "h-10 px-6 text-[10px] font-black rounded-full transition-all flex items-center gap-2 shadow-m3-2 border",
+                         showDeployment ? "bg-m3-primary text-m3-on-primary border-m3-primary" : "bg-m3-surface-container-highest text-m3-primary border-m3-outline-variant hover:bg-m3-primary/10"
+                       )}
+                     >
+                       <Link className="w-4 h-4" />
+                       Sincronização Direta
+                     </button>
+                   </div>
                 </div>
-                <button 
-                  onClick={handleDeploy}
-                  disabled={deployLoading || !currentResult}
-                  className="px-8 py-3 bg-emerald-500 text-black hover:bg-emerald-400 rounded-xl text-[10px] font-black transition-all active:scale-95 disabled:opacity-50 flex items-center gap-3 shadow-[0_0_30px_rgba(16,185,129,0.3)]"
-                >
-                  {deployLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  FINALIZE_DEPLOYMENT
-                </button>
-             </div>
+
+                <div className="relative group/code">
+                  <div className="absolute -top-3 left-6 z-10">
+                     <div className="bg-m3-surface-container-highest text-m3-on-surface-variant border border-m3-outline-variant px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-m3-1">
+                        Output_Buffer
+                     </div>
+                  </div>
+                  <pre className="bg-m3-surface-container-low text-m3-primary p-8 pt-10 rounded-[2rem] overflow-x-auto font-mono text-xs leading-relaxed border border-m3-outline-variant shadow-inner relative transition-colors group-hover/code:bg-m3-surface-container-lowest">
+                    <div className="absolute top-4 right-6 opacity-20 transition-opacity uppercase text-[9px] font-black pointer-events-none tracking-widest">Procedural_Generation_Manifest</div>
+                    {result}
+                  </pre>
+                </div>
+              </>
+            )}
           </div>
-        )}
-        <pre className="bg-neutral-950/50 backdrop-blur-sm text-emerald-400 p-6 rounded-xl overflow-x-auto font-mono text-xs leading-relaxed border border-neutral-800 shadow-inner group/code relative">
-          <div className="absolute top-2 right-2 opacity-10 group-hover/code:opacity-40 transition-opacity uppercase text-[8px] font-bold pointer-events-none">Output_History</div>
-          {result}
-        </pre>
       </div>
     );
   }, [cacheStats]);
@@ -685,7 +663,6 @@ export default function MapGenerator() {
       ]}
       endpointType="generate-map"
       onGenerate={generateMap}
-      onGenerateComplete={onGenerateComplete}
       onSaveCloud={handleSaveCloud}
       supportsEditing={true}
       extraControls={extraControls}

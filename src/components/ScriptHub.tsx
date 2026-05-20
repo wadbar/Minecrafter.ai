@@ -292,7 +292,11 @@ export default function ScriptHub() {
   }, [currentCode, undoStack, redoStack]);
 
   const promptTemplates = [
-    { label: "Bot Minerador", prompt: "Crie um bot Mineflayer que minera diamantes automaticamente na camada Y -59, volta para a superfície quando o inventário encher e guarda em um baú.", description: "Automação completa de coleta e armazenamento." },
+    { 
+      label: "Minerador & Evasão", 
+      prompt: "Crie um bot Mineflayer avançado para minerar recursos automaticamente (diamantes/ferro). Regras: 1. Use mineflayer-pathfinder para navegação. 2. Se detectar mobs hostis, fuja para um raio seguro. 3. Quando o inventário estiver 90% cheio ou vida baixa, retorne para as coordenadas da base [0, 64, 0].", 
+      description: "Mineração autônoma com protocolo de sobrevivência e retorno à base." 
+    },
     { label: "IA Defender Bot", prompt: "Crie um script para um bot que protege a base. Se detectar mobs hostis em um raio de 10 blocos, ele ataca. Se a vida baixar de 5 corações, ele come maçã dourada.", description: "Segurança reativa com Mineflayer-Pathfinder." },
     { label: "Skript Economia", prompt: "Crie um Skript de economia com comandos /buy, /sell e um sistema de mercado dinâmico baseado no stock do servidor.", description: "Lógica de plugins Bukkit/Paper via Skript." },
   ];
@@ -306,8 +310,7 @@ export default function ScriptHub() {
       renderOutput={renderOutput}
       extraControls={sidebar}
       promptTemplates={promptTemplates}
-      onGenerateComplete={onGenerateComplete}
-      parameters={{ scriptType }}
+      parameters={{ type: scriptType }}
       onSaveCloud={async (title, res) => {
         saveScriptLocal(res, title);
         await saveToCloud(res, title);

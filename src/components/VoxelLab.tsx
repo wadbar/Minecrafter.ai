@@ -286,82 +286,82 @@ export default function VoxelLab() {
   };
 
   return (
-    <div className="h-full flex flex-col gap-6 font-sans relative overflow-hidden">
+    <div className="h-full flex flex-col gap-6 font-sans relative overflow-hidden p-4 md:p-6 lg:p-8">
       {/* Background Ambience */}
-      <div className="absolute inset-0 pointer-events-none opacity-20 bg-[radial-gradient(circle_at_50%_-20%,rgba(16,185,129,0.1),transparent_50%)]" />
+      <div className="absolute inset-0 pointer-events-none opacity-20 bg-[radial-gradient(circle_at_50%_-20%,var(--color-m3-primary),transparent_50%)]" />
 
-      <div className="flex flex-col md:flex-row items-start justify-between gap-6 relative z-10">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 mb-2">
-             <div className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-black uppercase tracking-[0.2em] rounded animate-pulse">
-               {telemetry.status === "COMPUTING" ? "PROCESSING_STREAM" : "KERNEL_NOMINAL_V1"}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10 w-full max-w-7xl mx-auto">
+        <div className="text-center md:text-left space-y-2">
+          <div className="flex items-center justify-center md:justify-start gap-2 mb-3">
+             <div className="px-3 py-1 bg-m3-primary-container border border-m3-primary/20 text-m3-on-primary-container text-[10px] font-black uppercase tracking-[0.2em] rounded-full shadow-m3-1 animate-pulse">
+               {telemetry.status === "COMPUTING" ? "PROCESSANDO_LINK" : "SISTEMA_ESTRUTURAL_V1"}
              </div>
-             <div className="px-2 py-0.5 bg-neutral-900 border border-neutral-800 text-neutral-500 text-[10px] font-black uppercase tracking-[0.2em] rounded backdrop-blur">
-               Voxel_Processor_V9
+             <div className="px-3 py-1 bg-m3-surface-container-high border border-m3-outline-variant text-m3-on-surface-variant text-[10px] font-black uppercase tracking-[0.2em] rounded-full shadow-m3-1 backdrop-blur-xl">
+               Voxel_Kernel_V9
              </div>
           </div>
-          <h1 className="text-4xl md:text-5xl font-black text-white uppercase italic tracking-tighter leading-none">
-            Laboratório <span className="text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]">Voxel</span>
+          <h1 className="text-5xl md:text-6xl font-black text-m3-on-surface uppercase italic tracking-tighter leading-none">
+            Laboratório <span className="text-m3-primary shadow-m3-2">Voxel</span>
           </h1>
-          <p className="text-neutral-500 text-sm font-bold uppercase tracking-widest leading-none">
-            Ecossistema Industrial de Geometria Paramétrica.
+          <p className="text-m3-on-surface-variant/60 text-sm font-black uppercase tracking-widest leading-none mt-2">
+            Ecossistema de Geometria Paramétrica Industrial.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-           <div className="hidden lg:flex items-center gap-4 px-4 py-2 border border-white/5 rounded-2xl bg-neutral-950/40 backdrop-blur mr-2">
-              <div className="flex flex-col items-end">
-                <span className="text-[8px] font-mono text-neutral-600 uppercase">Engine_FPS</span>
-                <span className="text-xs font-black text-emerald-500 font-mono tracking-tighter">{telemetry.fps}</span>
+           <div className="hidden lg:flex items-center gap-6 px-6 py-3 border border-m3-outline-variant rounded-full bg-m3-surface-container-low/40 backdrop-blur-2xl shadow-m3-2 mr-2">
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-50">Engine_FPS</span>
+                <span className="text-sm font-black text-m3-primary font-mono tracking-tighter">{telemetry.fps}</span>
               </div>
-              <div className="w-px h-6 bg-neutral-800" />
-              <div className="flex flex-col items-end">
-                <span className="text-[8px] font-mono text-neutral-600 uppercase">GPU_Buffer</span>
-                <span className="text-xs font-black text-sky-500 font-mono tracking-tighter">{telemetry.gpuMem}</span>
+              <div className="w-px h-8 bg-m3-outline-variant" />
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-50">GPU_Buffer</span>
+                <span className="text-sm font-black text-m3-secondary font-mono tracking-tighter">{telemetry.gpuMem}</span>
               </div>
            </div>
            
-           <button 
-            onClick={() => setShowSettings(!showSettings)}
-            className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-400 hover:text-white hover:border-neutral-700 transition-all active:scale-95"
-            title="Configurações"
-           >
-             <Settings2 className="w-5 h-5" />
-           </button>
-           <button 
-            onClick={loadSession}
-            className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-400 hover:text-white hover:border-neutral-700 transition-all active:scale-95"
-            title="Carregar Sessão"
-           >
-             <FolderOpen className="w-5 h-5" />
-           </button>
-           <button 
-            onClick={saveSession}
-            className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-400 hover:text-white hover:border-neutral-700 transition-all active:scale-95"
-            title="Salvar Sessão"
-           >
-             <Save className="w-5 h-5" />
-           </button>
+           <div className="flex gap-2">
+             {[
+               { icon: Settings2, onClick: () => setShowSettings(!showSettings), title: "Configurações", color: "text-m3-on-surface-variant" },
+               { icon: FolderOpen, onClick: loadSession, title: "Abrir Local", color: "text-m3-on-surface-variant" },
+               { icon: Save, onClick: saveSession, title: "Salvar Local", color: "text-m3-on-surface-variant" }
+             ].map((btn, i) => (
+               <button 
+                key={i}
+                onClick={btn.onClick}
+                className={cn(
+                  "p-3.5 bg-m3-surface-container-high border border-m3-outline-variant rounded-2xl transition-all active:scale-90 shadow-m3-1 hover:border-m3-primary/50",
+                  btn.color
+                )}
+                title={btn.title}
+               >
+                 <btn.icon className="w-5 h-5" />
+               </button>
+             ))}
+           </div>
+
            <div className="relative group">
               <button 
                 disabled={!data}
-                className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 hover:bg-emerald-500 hover:text-black transition-all disabled:opacity-50 disabled:grayscale active:scale-95"
+                className="p-3.5 bg-m3-primary text-m3-on-primary rounded-2xl transition-all disabled:opacity-50 disabled:grayscale active:scale-95 shadow-m3-2"
               >
                 <Download className="w-5 h-5" />
               </button>
               {data && (
-                <div className="absolute right-0 top-full mt-2 w-48 py-2 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all pointer-events-none group-hover:pointer-events-auto z-50">
-                   <button onClick={exportOBJ} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-bold text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">
-                      <FileCode className="w-4 h-4 text-emerald-500" /> Export (.obj) Mesh
+                <div className="absolute right-0 top-full mt-3 w-56 p-2 bg-m3-surface-container-highest border border-m3-outline-variant rounded-[2rem] shadow-m3-4 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all pointer-events-none group-hover:pointer-events-auto z-50">
+                   <button onClick={exportOBJ} className="w-full flex items-center gap-3 px-5 py-3 text-[11px] font-black text-m3-on-surface-variant hover:bg-m3-primary/10 hover:text-m3-primary transition-all rounded-xl">
+                      <FileCode className="w-4 h-4" /> Export Mesh (.obj)
                    </button>
-                   <button onClick={exportSTL} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-bold text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">
-                      <BoxSelect className="w-4 h-4 text-sky-500" /> Export (.stl) Binary
+                   <button onClick={exportSTL} className="w-full flex items-center gap-3 px-5 py-3 text-[11px] font-black text-m3-on-surface-variant hover:bg-m3-secondary/10 hover:text-m3-secondary transition-all rounded-xl">
+                      <BoxSelect className="w-4 h-4" /> Export Binary (.stl)
                    </button>
-                   <button onClick={saveToCloud} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-bold text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">
-                      <Zap className="w-4 h-4 text-emerald-500" /> Cloud Archival
+                   <button onClick={saveToCloud} className="w-full flex items-center gap-3 px-5 py-3 text-[11px] font-black text-m3-on-surface-variant hover:bg-m3-primary/10 hover:text-m3-primary transition-all rounded-xl">
+                      <Zap className="w-4 h-4" /> Arquivar na Nuvem
                    </button>
-                   <button onClick={() => toast.info("Exportação JSON em buffer.")} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-bold text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">
-                      <FileJson className="w-4 h-4 text-amber-500" /> Export Data (.json)
+                   <div className="h-px bg-m3-outline-variant my-1 px-4" />
+                   <button onClick={() => toast.info("Exportação JSON em buffer.")} className="w-full flex items-center gap-3 px-5 py-3 text-[11px] font-black text-m3-on-surface-variant hover:bg-m3-tertiary/10 hover:text-m3-tertiary transition-all rounded-xl">
+                      <FileJson className="w-4 h-4" /> Exportar Dados (.json)
                    </button>
                 </div>
               )}
@@ -371,51 +371,33 @@ export default function VoxelLab() {
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 min-h-[600px] relative z-10">
         {/* Viewport Area */}
-        <div className="lg:col-span-8 bg-black rounded-[2.5rem] border border-neutral-900 overflow-hidden relative group shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+        <div className="lg:col-span-8 bg-black rounded-[3rem] border border-m3-outline-variant/30 overflow-hidden relative group shadow-m3-4">
           <Canvas shadows dpr={[1, 2]}>
             <Scene voxels={data?.voxels || []} wireframe={wireframe} />
           </Canvas>
 
           {/* Viewport Control Bar */}
-          <div className="absolute top-8 right-8 flex flex-col gap-3">
-             <button 
-               onClick={undo}
-               disabled={undoStack.length === 0}
-               className={cn(
-                 "p-3 rounded-2xl border backdrop-blur-xl transition-all shadow-xl active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed",
-                 "bg-neutral-950/60 border-white/5 text-neutral-400 hover:text-white"
-               )}
-               title="Desfazer"
-             >
-               <RotateCcw className="w-6 h-6" />
-             </button>
-             <button 
-               onClick={redo}
-               disabled={redoStack.length === 0}
-               className={cn(
-                 "p-3 rounded-2xl border backdrop-blur-xl transition-all shadow-xl active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed",
-                 "bg-neutral-950/60 border-white/5 text-neutral-400 hover:text-white"
-               )}
-               title="Refazer"
-             >
-               <RotateCw className="w-6 h-6" />
-             </button>
-             <button 
-               onClick={() => setWireframe(!wireframe)}
-               className={cn(
-                 "p-3 rounded-2xl border backdrop-blur-xl transition-all shadow-xl active:scale-90",
-                 wireframe ? "bg-emerald-500 border-emerald-400 text-black" : "bg-neutral-950/60 border-white/5 text-neutral-400 hover:text-white"
-               )}
-               title="Toggle Wireframe"
-             >
-               <Maximize className="w-6 h-6" />
-             </button>
-             <button 
-                onClick={() => toast.info("Modo de Inspeção Ativado")}
-                className="p-3 bg-neutral-950/60 border border-white/5 text-neutral-400 rounded-2xl backdrop-blur-xl hover:text-white transition-all shadow-xl active:scale-90"
-             >
-               <Target className="w-6 h-6" />
-             </button>
+          <div className="absolute top-8 right-8 flex flex-col gap-4">
+             {[
+               { icon: RotateCcw, onClick: undo, disabled: undoStack.length === 0, title: "Desfazer", color: "text-m3-on-surface-variant" },
+               { icon: RotateCw, onClick: redo, disabled: redoStack.length === 0, title: "Refazer", color: "text-m3-on-surface-variant" },
+               { icon: Maximize, onClick: () => setWireframe(!wireframe), active: wireframe, title: "Wireframe", color: wireframe ? "bg-m3-primary text-m3-on-primary" : "text-m3-on-surface-variant" },
+               { icon: Target, onClick: () => toast.info("Modo de Inspeção Ativado"), title: "Inspecionar", color: "text-m3-on-surface-variant" }
+             ].map((tool, i) => (
+               <button 
+                 key={i}
+                 onClick={tool.onClick}
+                 disabled={tool.disabled}
+                 className={cn(
+                   "p-3.5 rounded-2xl border backdrop-blur-2xl transition-all shadow-m3-2 active:scale-90 disabled:opacity-20",
+                   tool.active ? "bg-m3-primary border-m3-primary shadow-m3-1" : "bg-m3-surface-container-low/60 border-m3-outline-variant hover:border-m3-primary/30",
+                   tool.color
+                 )}
+                 title={tool.title}
+               >
+                 <tool.icon className="w-6 h-6" />
+               </button>
+             ))}
           </div>
 
           {/* Viewport HUD */}
@@ -423,48 +405,48 @@ export default function VoxelLab() {
             <motion.div 
                initial={{ opacity: 0, x: -20 }}
                animate={{ opacity: 1, x: 0 }}
-               className="p-6 bg-neutral-950/80 backdrop-blur-2xl border border-white/10 rounded-3xl space-y-5 min-w-[220px] shadow-2xl"
+               className="p-8 bg-m3-surface-container-high/80 backdrop-blur-3xl border border-m3-outline-variant rounded-[2.5rem] space-y-6 min-w-[280px] shadow-m3-4"
             >
-               <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                 <div className="flex items-center gap-2">
-                    <div className={cn("w-2 h-2 rounded-full animate-pulse", telemetry.status === "READY" ? "bg-emerald-500" : "bg-amber-500")} />
-                    <span className="text-[10px] font-black font-mono text-neutral-400 uppercase tracking-widest">{telemetry.status}</span>
+               <div className="flex items-center justify-between border-b border-m3-outline-variant/30 pb-4">
+                 <div className="flex items-center gap-3">
+                    <div className={cn("w-2.5 h-2.5 rounded-full shadow-m3-1 animate-pulse", telemetry.status === "READY" ? "bg-m3-primary" : "bg-m3-secondary")} />
+                    <span className="text-[11px] font-black text-m3-on-surface-variant uppercase tracking-[0.25em]">{telemetry.status}</span>
                  </div>
-                 <span className="text-[9px] font-mono text-neutral-600 uppercase font-bold">NODE_01</span>
+                 <span className="text-[10px] font-mono text-m3-on-surface-variant/40 uppercase font-black">NODE_ESTRUTURAL</span>
                </div>
                
-               <div className="space-y-1">
-                 <div className="text-[9px] font-mono text-neutral-600 uppercase font-black">Entidade_Ativa</div>
-                 <div className="text-lg font-black text-white truncate max-w-[180px] uppercase italic tracking-tighter leading-none">
+               <div className="space-y-2">
+                 <div className="text-[10px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-40">Entidade_Ativa</div>
+                 <div className="text-2xl font-black text-m3-on-surface truncate max-w-[220px] uppercase italic tracking-tighter leading-none">
                     {data?.name || "Null_Pointer"}
                  </div>
                </div>
 
-               <div className="grid grid-cols-2 gap-6">
+               <div className="grid grid-cols-2 gap-8">
                  <div className="space-y-1">
-                   <div className="text-[8px] font-mono text-neutral-600 uppercase font-black">Triângulos</div>
-                   <div className="text-sm font-black text-emerald-400 font-mono tracking-tighter">
+                   <div className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-40">Polígonos</div>
+                   <div className="text-base font-black text-m3-primary font-mono tracking-tighter">
                      {telemetry.triangles.toLocaleString()}
                    </div>
                  </div>
                  <div className="space-y-1">
-                   <div className="text-[8px] font-mono text-neutral-600 uppercase font-black">Latency_ms</div>
-                   <div className="text-sm font-black text-sky-400 font-mono tracking-tighter">
-                      {data?.stats.generationTime || 0}
+                   <div className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-40">Latência</div>
+                   <div className="text-base font-black text-m3-secondary font-mono tracking-tighter">
+                      {data?.stats.generationTime || 0}ms
                    </div>
                  </div>
                </div>
 
-               <div className="pt-2 border-t border-white/5">
-                  <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-[8px] font-mono text-neutral-600 uppercase">Matriz_Load</span>
-                    <span className="text-[9px] font-mono text-emerald-500 font-black">{(data?.voxels.length || 0) / 2.5}%</span>
+               <div className="pt-4 border-t border-m3-outline-variant/30">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-40">Carga_Matriz</span>
+                    <span className="text-[10px] font-black text-m3-primary">{(data?.voxels.length || 0) / 2.5}%</span>
                   </div>
-                  <div className="h-1 bg-neutral-900 rounded-full overflow-hidden">
+                  <div className="h-2 bg-m3-surface-container rounded-full overflow-hidden shadow-inner p-0.5">
                      <motion.div 
                        initial={{ width: 0 }}
                        animate={{ width: `${Math.min(100, (data?.voxels.length || 0) / 2.5)}%` }}
-                       className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,1)]"
+                       className="h-full bg-m3-primary rounded-full shadow-m3-1"
                      />
                   </div>
                </div>
@@ -472,39 +454,46 @@ export default function VoxelLab() {
           </div>
 
           {!data && !isGenerating && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-950/20 backdrop-blur-[2px] pointer-events-none">
-               <div className="p-8 bg-neutral-900/40 border border-neutral-800 rounded-full mb-6 relative">
-                 <div className="absolute inset-0 border border-neutral-700 rounded-full animate-ping opacity-30" />
-                 <Box className="w-16 h-16 text-neutral-700 animate-pulse" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[4px] pointer-events-none">
+               <div className="p-10 bg-m3-surface-container/40 border border-m3-outline-variant rounded-[3rem] mb-6 relative shadow-m3-3">
+                 <div className="absolute inset-0 border-2 border-m3-primary/20 rounded-[3rem] animate-ping opacity-30" />
+                 <Box className="w-20 h-20 text-m3-on-surface-variant/20 animate-pulse" />
                </div>
-               <p className="text-neutral-600 font-mono text-xs uppercase tracking-[0.5em] font-black">Matriz_Vazia: Aguardando_Sincronização</p>
+               <div className="text-center space-y-2">
+                 <p className="text-m3-on-surface-variant font-black text-xs uppercase tracking-[0.6em] opacity-40">Matriz_Em_Repouso</p>
+                 <p className="text-m3-primary/40 font-black text-[10px] uppercase tracking-widest">Aguardando_Sincronização_Neural</p>
+               </div>
             </div>
           )}
 
           {isGenerating && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-md z-20">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-m3-surface-container/90 backdrop-blur-2xl z-20">
                <div className="relative">
-                 <div className="w-32 h-32 border-2 border-emerald-500/10 rounded-full animate-[spin_4s_linear_infinite]" />
-                 <div className="absolute inset-0 border-t-2 border-emerald-500 rounded-full animate-spin" />
-                 <div className="absolute inset-4 border-r-2 border-sky-500 rounded-full animate-[spin_2s_linear_infinite_reverse]" />
-                 <Cpu className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 text-emerald-500" />
+                 <div className="w-40 h-40 border-2 border-m3-primary/10 rounded-full animate-[spin_4s_linear_infinite]" />
+                 <div className="absolute inset-0 border-t-4 border-m3-primary rounded-full animate-spin" />
+                 <div className="absolute inset-6 border-r-4 border-m3-secondary rounded-full animate-[spin_2s_linear_infinite_reverse]" />
+                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                   <Cpu className="w-12 h-12 text-m3-primary animate-pulse" />
+                 </div>
                </div>
-               <div className="mt-10 flex flex-col items-center gap-2">
-                 <p className="text-emerald-500 font-mono text-[10px] font-black uppercase tracking-[0.6em] animate-pulse">Sincronizando_Geometria_Neural...</p>
-                 <span className="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">[ ALOCANDO SUBPROCESSOS DE RENDERIZAÇÃO ]</span>
+               <div className="mt-12 flex flex-col items-center gap-3">
+                 <p className="text-m3-primary font-black text-sm uppercase tracking-[0.5em] animate-pulse">Sintetizando_Geometria...</p>
+                 <span className="text-[10px] font-black text-m3-on-surface-variant/40 uppercase tracking-[0.2em]">[ ALOCANDO SUBPROCESSOS DE RENDERIZAÇÃO ]</span>
                </div>
             </div>
           )}
         </div>
-
         {/* Sidebar Controls */}
         <div className="lg:col-span-4 flex flex-col gap-6">
           {/* Prompt Entry */}
-          <div className="p-2 bg-neutral-900 border border-neutral-800 rounded-3xl flex items-center gap-2 focus-within:border-emerald-500/50 focus-within:shadow-[0_0_30px_rgba(16,185,129,0.1)] transition-all shadow-2xl">
+          <div className="p-2.5 bg-m3-surface-container-high border border-m3-outline-variant rounded-[2rem] flex items-center gap-3 focus-within:border-m3-primary/50 focus-within:shadow-m3-3 transition-all shadow-m3-2 group/input">
+             <div className="pl-4">
+               <Sparkles className="w-5 h-5 text-m3-primary opacity-40 group-focus-within/input:opacity-100 transition-opacity" />
+             </div>
              <input 
                type="text" 
-               placeholder="Descreva a estrutura industrial (ex: Reactor Core)..."
-               className="flex-1 bg-transparent border-none outline-none px-5 py-4 text-sm text-white placeholder:text-neutral-600 font-bold uppercase tracking-tight"
+               placeholder="Descreva a estrutura industrial..."
+               className="flex-1 bg-transparent border-none outline-none py-4 text-sm text-m3-on-surface placeholder:text-m3-on-surface-variant/30 font-black uppercase tracking-tight"
                value={prompt}
                onChange={(e) => setPrompt(e.target.value)}
                onKeyDown={(e) => e.key === 'Enter' && generateVoxel()}
@@ -512,16 +501,16 @@ export default function VoxelLab() {
              <button 
                onClick={generateVoxel}
                disabled={isGenerating || !prompt.trim()}
-               className="p-4 bg-emerald-500 text-black rounded-2xl hover:bg-emerald-400 disabled:opacity-50 disabled:grayscale transition-all active:scale-90 flex-shrink-0 shadow-lg shadow-emerald-500/20"
+               className="p-5 bg-m3-primary text-m3-on-primary rounded-2xl hover:bg-m3-primary/90 disabled:opacity-50 disabled:grayscale transition-all active:scale-90 flex-shrink-0 shadow-m3-2"
              >
-               <Sparkles className="w-6 h-6" />
+               <Play className="w-6 h-6 fill-current" />
              </button>
           </div>
 
-          <div className="flex-1 bg-neutral-950 border border-white/5 rounded-[2rem] flex flex-col overflow-hidden shadow-2xl relative">
-             <div className="absolute inset-0 bg-neutral-900/10 pointer-events-none" />
+          <div className="flex-1 bg-m3-surface-container-low border border-m3-outline-variant rounded-[3rem] flex flex-col overflow-hidden shadow-m3-3 relative group/sidebar">
+             <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-m3-primary/5 to-transparent pointer-events-none" />
              
-             <div className="flex border-b border-white/5 p-3 gap-2 bg-black/40 relative z-10">
+             <div className="flex border-b border-m3-outline-variant/30 p-4 gap-3 bg-m3-surface-container-low/40 backdrop-blur-xl relative z-10">
                 {[
                   { id: "inspect", label: "Inspeção", icon: Target },
                   { id: "history", label: "Histórico", icon: History },
@@ -532,12 +521,12 @@ export default function VoxelLab() {
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
                     className={cn(
-                      "flex-1 flex flex-col items-center justify-center gap-1.5 py-4 rounded-2xl transition-all font-mono text-[8px] font-black uppercase tracking-widest",
-                      activeTab === tab.id ? "bg-white/5 text-emerald-400 shadow-inner" : "text-neutral-600 hover:text-neutral-400 hover:bg-white/[0.02]"
+                      "flex-1 flex flex-col items-center justify-center gap-2 py-4 rounded-2xl transition-all font-black text-[9px] uppercase tracking-widest",
+                      activeTab === tab.id ? "bg-m3-primary-container text-m3-on-primary-container shadow-m3-1" : "text-m3-on-surface-variant/40 hover:text-m3-on-surface-variant hover:bg-m3-surface-container-high/40"
                     )}
                   >
-                    <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "text-emerald-500" : "text-neutral-800")} />
-                    <span className="hidden sm:inline">{tab.label}</span>
+                    <tab.icon className={cn("w-5 h-5", activeTab === tab.id ? "text-m3-primary" : "text-m3-on-surface-variant/40")} />
+                    <span className="hidden xl:inline">{tab.label}</span>
                   </button>
                 ))}
              </div>
@@ -546,74 +535,61 @@ export default function VoxelLab() {
                 <AnimatePresence mode="wait">
                    {activeTab === "inspect" && (
                      <motion.div 
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
                         className="space-y-8"
                      >
                         {data ? (
                           <>
-                            <div className="space-y-3 pb-8 border-b border-white/5">
+                            <div className="space-y-4 pb-10 border-b border-m3-outline-variant/30">
                                <div className="flex items-center justify-between">
-                                 <h3 className="text-white font-black uppercase italic tracking-tighter text-2xl">{data.name}</h3>
-                                 <div className="px-2 py-1 bg-emerald-500/10 rounded text-emerald-500 text-[8px] font-black uppercase">Verified</div>
+                                 <h3 className="text-m3-on-surface font-black uppercase italic tracking-tighter text-3xl">{data.name}</h3>
+                                 <div className="px-3 py-1 bg-m3-primary/10 border border-m3-primary/20 rounded-full text-m3-primary text-[10px] font-black uppercase tracking-widest shadow-m3-1">Verificado</div>
                                </div>
-                               <p className="text-neutral-400 text-sm leading-relaxed font-medium">{data.description}</p>
+                               <p className="text-m3-on-surface-variant/70 text-sm leading-relaxed font-bold italic">"{data.description}"</p>
                             </div>
                             
-                            <div className="grid grid-cols-2 gap-4">
-                               <div className="p-5 bg-white/[0.02] border border-white/5 rounded-[1.5rem] hover:bg-white/[0.04] transition-colors group">
-                                  <div className="text-[10px] font-mono text-neutral-600 uppercase mb-2 flex justify-between">
-                                     <span>Escala_X</span>
-                                     <ChevronRight className="w-3 h-3 text-neutral-800 group-hover:text-emerald-500 transition-colors" />
-                                  </div>
-                                  <div className="text-2xl font-black text-white italic">{data.stats.dimensions[0]}<span className="text-neutral-700 ml-1 text-xs">M</span></div>
-                               </div>
-                               <div className="p-5 bg-white/[0.02] border border-white/5 rounded-[1.5rem] hover:bg-white/[0.04] transition-colors group">
-                                  <div className="text-[10px] font-mono text-neutral-600 uppercase mb-2 flex justify-between">
-                                     <span>Escala_Y</span>
-                                     <ChevronRight className="w-3 h-3 text-neutral-800 group-hover:text-sky-500 transition-colors" />
-                                  </div>
-                                  <div className="text-2xl font-black text-white italic">{data.stats.dimensions[1]}<span className="text-neutral-700 ml-1 text-xs">M</span></div>
-                               </div>
-                               <div className="p-5 bg-white/[0.02] border border-white/5 rounded-[1.5rem] hover:bg-white/[0.04] transition-colors group">
-                                  <div className="text-[10px] font-mono text-neutral-600 uppercase mb-2 flex justify-between">
-                                     <span>Escala_Z</span>
-                                     <ChevronRight className="w-3 h-3 text-neutral-800 group-hover:text-amber-500 transition-colors" />
-                                  </div>
-                                  <div className="text-2xl font-black text-white italic">{data.stats.dimensions[2]}<span className="text-neutral-700 ml-1 text-xs">M</span></div>
-                               </div>
-                               <div className="p-5 bg-emerald-500/5 border border-emerald-500/10 rounded-[1.5rem] hover:bg-emerald-500/10 transition-colors group">
-                                  <div className="text-[10px] font-mono text-neutral-500 uppercase mb-2">Estrutura_Fill</div>
-                                  <div className="text-2xl font-black text-emerald-400 italic">
-                                    {((data.stats.totalBlocks / (data.stats.dimensions[0] * data.stats.dimensions[1] * data.stats.dimensions[2] || 1)) * 100).toFixed(1)}%
-                                  </div>
-                               </div>
+                            <div className="grid grid-cols-2 gap-5">
+                               {[
+                                 { label: "Escala_X", val: data.stats.dimensions[0], color: "text-m3-primary", bg: "bg-m3-primary/5" },
+                                 { label: "Escala_Y", val: data.stats.dimensions[1], color: "text-m3-secondary", bg: "bg-m3-secondary/5" },
+                                 { label: "Escala_Z", val: data.stats.dimensions[2], color: "text-m3-tertiary", bg: "bg-m3-tertiary/5" },
+                                 { label: "Fill_Rate", val: `${((data.stats.totalBlocks / (data.stats.dimensions[0] * data.stats.dimensions[1] * data.stats.dimensions[2] || 1)) * 100).toFixed(1)}%`, color: "text-m3-primary", bg: "bg-m3-primary/5" }
+                               ].map((stat, i) => (
+                                 <div key={i} className={cn("p-6 border border-m3-outline-variant/30 rounded-[2rem] hover:shadow-m3-2 transition-all group", stat.bg)}>
+                                    <div className="text-[10px] font-black text-m3-on-surface-variant/40 uppercase mb-3 flex justify-between">
+                                       <span>{stat.label}</span>
+                                       <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                    <div className={cn("text-3xl font-black italic", stat.color)}>{stat.val}</div>
+                                 </div>
+                               ))}
                             </div>
 
-                            <div className="p-6 bg-neutral-900/50 border border-neutral-800 rounded-3xl space-y-4">
-                               <div className="flex items-center gap-2 mb-2">
-                                 <BarChart3 className="w-4 h-4 text-sky-500" />
-                                 <span className="text-[10px] font-mono text-neutral-500 font-black uppercase tracking-widest">Audit_Report</span>
+                            <div className="p-8 bg-m3-surface-container-high/40 border border-m3-outline-variant rounded-[2.5rem] space-y-6 shadow-m3-2">
+                               <div className="flex items-center gap-3">
+                                 <BarChart3 className="w-5 h-5 text-m3-secondary" />
+                                 <span className="text-[11px] font-black text-m3-on-surface-variant uppercase tracking-[0.2em] opacity-60">Relatório_Integridade</span>
                                </div>
-                               <div className="space-y-4">
+                               <div className="space-y-5">
                                   <div className="flex justify-between items-center text-xs">
-                                     <span className="text-neutral-600 font-bold">Complexidade_Matriz</span>
-                                     <span className="text-white font-black uppercase">Standard_Ops</span>
+                                     <span className="text-m3-on-surface-variant font-black uppercase opacity-40">Complexidade</span>
+                                     <span className="text-m3-on-surface font-black uppercase tracking-widest">Procedural_Ops</span>
                                   </div>
                                   <div className="flex justify-between items-center text-xs">
-                                     <span className="text-neutral-600 font-bold">Integridade_Módulo</span>
-                                     <span className="text-emerald-500 font-black uppercase tracking-widest">100% OK</span>
+                                     <span className="text-m3-on-surface-variant font-black uppercase opacity-40">Status_Mesh</span>
+                                     <span className="text-m3-primary font-black uppercase tracking-widest">100% NOMINAL</span>
                                   </div>
                                </div>
                             </div>
                           </>
                         ) : (
-                          <div className="h-64 flex flex-col items-center justify-center text-neutral-700 text-center space-y-6 opacity-30 grayscale saturate-0">
-                             <div className="p-8 bg-neutral-900 border border-neutral-800 rounded-full">
-                               <Target className="w-16 h-16" />
+                          <div className="h-80 flex flex-col items-center justify-center text-center space-y-8 opacity-20 group-hover/sidebar:opacity-40 transition-opacity">
+                             <div className="p-10 bg-m3-surface-container-high border border-m3-outline-variant rounded-[3rem] shadow-m3-1">
+                               <Target className="w-20 h-20" />
                              </div>
-                             <p className="text-[10px] font-mono uppercase tracking-[0.4em] font-black max-w-[200px]">Seleção_Vazia: Informe o prompt para invocar a matriz</p>
+                             <p className="text-[11px] font-black uppercase tracking-[0.5em] max-w-[240px] leading-relaxed">Seleção_Vazia: Informe o prompt para invocar a matriz neural</p>
                           </div>
                         )}
                      </motion.div>

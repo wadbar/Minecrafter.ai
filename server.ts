@@ -453,16 +453,18 @@ EXECUTION:
 6. Translate all user-facing strings to ${targetLanguage || "pt-BR"}.
 Return ONLY valid code.`;
         } else if (endpointType === "generate-mod") {
-          finalPrompt = `# ROLE: LEAD ARCHITECT
-Task: Generate high-performance Minecraft ${data.type || "Code"}: "${prompt}".
-SPECS: 
-- Framework: API-driven (Forge/Fabric/Paper auto-detect).
-- Pattern: Logic Modularity and Decoupled Services.
-- Optimization: Resource protection.
-- Threading: Ensure asynchronous execution for blocking tasks.
-- Event Handling: Non-blocking server patterns.
-- Documentation: Javadoc/TSDoc header included.
-Return ONLY valid, compilation-ready code block.`;
+          const type = data.type || "Code";
+          finalPrompt = `# ROLE: SENIOR MINECRAFT & NODE.JS ENGINEER
+Task: Generate high-performance ${type}: "${prompt}".
+
+CORE REQUIREMENTS:
+1. ${type === 'Mineflayer' ? 'Use ESM syntax (import), mineflayer-pathfinder, and mineflayer-collectblock where applicable.' : 'Logic Modularity and Decoupled Services.'}
+2. Apply Asynchronous Patterns: Use async/await for I/O and non-blocking loops.
+3. State Management: Implement a clean finite state machine (FSM) if the task is complex.
+4. Survival Logic: For bots, include checks for inventory, health, and nearby hazards.
+5. Code Style: Clean, documented, and production-ready.
+
+Return ONLY the code block.`;
         } else if (endpointType === "generate-map") {
           finalPrompt = `# ROLE: MAP ARCHITECT
 Task: Design terrain/structure: "${prompt}".

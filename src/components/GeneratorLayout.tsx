@@ -356,48 +356,53 @@ export default React.memo(function GeneratorLayout({
   }, [toggleMic]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-10rem)] gap-4">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-neutral-900">
+    <div className="flex flex-col h-[calc(100vh-8rem)] gap-4 transition-colors duration-300">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-m3-outline-variant">
         <div className="space-y-4">
           <div className="flex items-center gap-3">
              <div className="relative">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)] animate-pulse" />
-                <div className="absolute inset-0 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping opacity-25" />
+                <div className="w-2.5 h-2.5 rounded-full bg-m3-primary shadow-m3-1 animate-pulse" />
+                <div className="absolute inset-0 w-2.5 h-2.5 rounded-full bg-m3-primary animate-ping opacity-20" />
              </div>
              <div className="flex flex-col">
-                <span className="text-[10px] font-mono text-neutral-600 uppercase tracking-[0.4em] font-black leading-none mb-1">Architecture_Connected</span>
-                <div className="h-[1px] w-full bg-gradient-to-r from-emerald-500/50 to-transparent" />
+                <span className="text-[10px] font-bold text-m3-on-surface-variant uppercase tracking-widest leading-none mb-1">Architecture Connected</span>
              </div>
           </div>
           <div className="space-y-1">
-            <h2 className="text-4xl font-black tracking-tighter text-white uppercase italic">{title}</h2>
-            <p className="text-xs text-neutral-600 font-mono font-bold uppercase tracking-widest">{description}</p>
+            <h2 className="text-3xl font-bold tracking-tight text-m3-on-surface">{title}</h2>
+            <p className="text-sm text-m3-on-surface-variant font-medium">{description}</p>
           </div>
         </div>
-        <div className="flex items-center gap-4 bg-neutral-950 p-2 rounded-[2rem] border border-neutral-900 shadow-2xl">
+        <div className="flex items-center gap-2 bg-m3-surface-container-high p-2 rounded-full border border-m3-outline-variant shadow-m3-1 self-start md:self-center">
           <AIGuide context={title} prompt={prompt} parameters={{ mode, targetLanguage, ...moduleParams }} />
           {supportsEditing && (
-            <div className="flex bg-neutral-950 border border-neutral-800 rounded-lg p-1 shadow-inner">
+            <div className="flex bg-m3-surface-container rounded-full p-1 border border-m3-outline-variant">
               <button
                 onClick={() => setMode("create")}
-                className={cn("px-4 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2", mode === "create" ? "bg-emerald-500/10 text-emerald-500" : "text-neutral-600 hover:text-neutral-400")}
+                className={cn(
+                  "px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2", 
+                  mode === "create" ? "bg-m3-primary text-m3-on-primary" : "text-m3-on-surface-variant hover:bg-m3-surface-variant"
+                )}
               >
-                <Plus className="w-3.5 h-3.5" /> Creation
+                <Plus className="w-3.5 h-3.5" /> Criar
               </button>
               <button
                 onClick={() => setMode("edit")}
-                className={cn("px-4 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2", mode === "edit" ? "bg-sky-500/10 text-sky-500" : "text-neutral-600 hover:text-neutral-400")}
+                className={cn(
+                  "px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2", 
+                  mode === "edit" ? "bg-m3-primary text-m3-on-primary" : "text-m3-on-surface-variant hover:bg-m3-surface-variant"
+                )}
               >
-                <FileEdit className="w-3.5 h-3.5" /> Optimize
+                <FileEdit className="w-3.5 h-3.5" /> Otimizar
               </button>
             </div>
           )}
           <button
             onClick={handleClear}
-            className="px-4 py-2 text-neutral-600 hover:text-white hover:bg-neutral-900 border border-transparent hover:border-neutral-800 rounded-lg transition-all flex items-center gap-2 text-[11px] uppercase font-bold tracking-wider"
+            className="px-4 py-2 text-m3-on-surface-variant hover:text-m3-on-surface hover:bg-m3-surface-variant rounded-full transition-all flex items-center gap-2 text-xs font-bold"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            Reset Context
+            Limpar
           </button>
         </div>
       </header>
@@ -437,58 +442,72 @@ export default React.memo(function GeneratorLayout({
         />
       </div>
 
-      <div className="flex-none flex flex-col gap-2">
-        {extraControls && <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-4 shadow-xl">{extraControls}</div>}
-        <div className="relative bg-neutral-950 border border-neutral-800 rounded-2xl p-4 shadow-xl">
+      <div className="flex-none flex flex-col gap-3">
+        {extraControls && (
+          <div className="bg-m3-surface-container border border-m3-outline-variant rounded-3xl p-4 shadow-m3-1 animate-in fade-in zoom-in-95 duration-300">
+            {extraControls}
+          </div>
+        )}
+        <div className="relative bg-m3-surface-container-high border border-m3-outline-variant rounded-3xl p-4 shadow-m3-2 group transition-all duration-300 focus-within:border-m3-primary focus-within:shadow-m3-3">
            <textarea
             value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={isListening ? "Audio_Receiving..." : (mode === "edit" ? "Describe optimization directives for the source code above..." : placeholder)}
-          className={cn("w-full bg-transparent pr-32 text-white placeholder-neutral-700 focus:outline-none transition-all resize-none scrollbar-thin overflow-y-auto text-sm font-medium", isListening && "animate-pulse")}
-          rows={3}
-        />
-        <div className="absolute bottom-4 right-6 flex items-center gap-3">
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(prompt);
-              toast.success("Prompt Copiado", { description: "Conteúdo movido para a área de transferência." });
-            }}
-            disabled={!prompt.trim()}
-            className="p-2.5 rounded-xl transition-all border text-neutral-600 hover:text-neutral-400 border-transparent hover:bg-neutral-900 disabled:opacity-30"
-            title="Copy Prompt"
-          >
-            <Copy className="w-5 h-5" />
-          </button>
-          <button
-            onClick={toggleMic}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={isListening ? "Escutando..." : (mode === "edit" ? "Descreva as diretrizes de otimização..." : placeholder)}
             className={cn(
-              "p-2.5 rounded-xl transition-all border",
-              isListening ? "text-red-500 bg-red-500/10 border-red-500/30" : "text-neutral-600 hover:text-neutral-400 border-transparent hover:bg-neutral-900"
+              "w-full bg-transparent pr-36 text-m3-on-surface placeholder-m3-on-surface-variant/50 focus:outline-none transition-all resize-none min-h-[96px] text-sm font-medium leading-relaxed", 
+              isListening && "animate-pulse"
             )}
-          >
-            {isListening ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          </button>
-          <button
-            onClick={handleGenerate}
-            disabled={!prompt.trim() || isBusy}
-            data-action="generate-button"
-            className={cn("flex items-center gap-2 h-12 px-6 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg active:scale-95 group", mode === "edit" ? "bg-sky-600 hover:bg-sky-500 disabled:bg-neutral-900" : "bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-900")}
-          >
-            {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : (
-              <>
-                <span>Execute</span>
-                <Send className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-              </>
-            )}
-          </button>
+            rows={3}
+          />
+          <div className="absolute bottom-4 right-5 flex items-center gap-2">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(prompt);
+                toast.success("Copiado!");
+              }}
+              disabled={!prompt.trim()}
+              className="p-3 rounded-full transition-all text-m3-on-surface-variant hover:bg-m3-surface-variant disabled:opacity-30"
+              title="Copiar Prompt"
+            >
+              <Copy className="w-5 h-5" />
+            </button>
+            <button
+              onClick={toggleMic}
+              className={cn(
+                "p-3 rounded-full transition-all border",
+                isListening 
+                  ? "bg-m3-error-container text-m3-on-error-container border-m3-error" 
+                  : "text-m3-on-surface-variant border-transparent hover:bg-m3-surface-variant"
+              )}
+            >
+              {isListening ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={handleGenerate}
+              disabled={!prompt.trim() || isBusy}
+              data-action="generate-button"
+              className={cn(
+                "flex items-center gap-2 h-12 px-6 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all shadow-m3-2 active:scale-95 group", 
+                mode === "edit" 
+                  ? "bg-m3-tertiary text-m3-on-tertiary hover:shadow-m3-3 disabled:bg-m3-surface-variant disabled:text-m3-on-surface-variant/30" 
+                  : "bg-m3-primary text-m3-on-primary hover:shadow-m3-3 disabled:bg-m3-surface-variant disabled:text-m3-on-surface-variant/30"
+              )}
+            >
+              {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                <>
+                  <span>Executar</span>
+                  <Send className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                </>
+              )}
+            </button>
+          </div>
+          <div className="absolute top-4 right-6 pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity">
+            <span className="text-[10px] font-bold text-m3-on-surface-variant bg-m3-surface-variant/50 px-2 py-0.5 rounded-full border border-m3-outline-variant">
+              Enter ↵ Enviar
+            </span>
+          </div>
         </div>
-        <div className="absolute top-2 right-6">
-          <span className="text-[10px] uppercase font-mono text-neutral-600 font-bold bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800">
-            Enter para enviar, Shift+Enter para quebra
-          </span>
-        </div>
-      </div>
       </div>
     </div>
   );

@@ -1,33 +1,20 @@
 import React, { useState, useMemo, useCallback } from "react";
 import GeneratorLayout from "./GeneratorLayout";
 import { OfflineEngine } from "../services/OfflineEngine";
-import { Download as DownloadIcon, Accessibility, Monitor, User, BookOpen, Sliders, Loader2, Shirt, Trash2, CheckCircle2, RotateCcw, PlusCircle, CloudUpload } from "lucide-react";
+import { Download as DownloadIcon, Accessibility, Monitor, User, BookOpen, Sliders, Loader2, Shirt, Trash2, CheckCircle2, RotateCcw, PlusCircle, CloudUpload, History } from "lucide-react";
 import SkinViewer3D from "./SkinViewer3D";
 import { saveAs } from "file-saver";
 import { toast } from "sonner";
 import { saveArtifact } from "../lib/db";
 import { cn, sleep, withExponentialBackoff } from "../lib/utils";
 import { useAuth } from "../lib/firebase";
-
-interface SkinHistoryItem {
-  url: string;
-  params: {
-    prompt: string;
-    modelType: "classic" | "slim";
-    detailLevel: number;
-    colorIntensity: number;
-    stylization: number;
-    contrast: number;
-    patternScale: number;
-    ditherLevel: number;
-    useCape: boolean;
-    palette: string;
-    customColor?: string;
-  }
-}
+import { usePersistentHistory } from "../hooks/usePersistentHistory";
 
 export default function SkinGenerator() {
   const { user } = useAuth();
+  const { history, addHistory, removeHistory } = usePersistentHistory('skin', 20);
+  const [activeTab, setActiveTab] = useState<"viewport" | "history">("viewport");
+  
   const [modelType, setModelType] = useState<"classic" | "slim">("classic");
   const [compilationMode, setCompilationMode] = useState<"rapido" | "otimizado" | "debug">("otimizado");
   const [palette, setPalette] = useState("Default");
@@ -43,8 +30,6 @@ export default function SkinGenerator() {
   const [patternScale, setPatternScale] = useState(50);
   const [ditherLevel, setDitherLevel] = useState(20);
   const [currentSkinUrl, setCurrentSkinUrl] = useState<string | null>("https://textures.minecraft.net/texture/31cf464973347fd5fd7546654e95f082e6ef920c812d348003f90b8ff4f0ed83"); // Steve default texture
-  const [history, setHistory] = useState<SkinHistoryItem[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
   const [isExporting, setIsExporting] = useState(false);
   const [lastBasePrompt, setLastBasePrompt] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -54,40 +39,6 @@ export default function SkinGenerator() {
   const [capeInputError, setCapeInputError] = useState(false);
   const [telemetryLogs, setTelemetryLogs] = useState<{id: string, msg: string, type: 'info' | 'warn' | 'success'}[]>([]);
   const [isSavingCloud, setIsSavingCloud] = useState(false);
-
-  const canUndo = history.length > 0 && historyIndex < history.length - 1;
-  const canRedo = historyIndex > 0;
-
-  const applyHistoryState = useCallback((item: SkinHistoryItem) => {
-    setCurrentSkinUrl(item.url);
-    setDetailLevel(item.params.detailLevel);
-    setColorIntensity(item.params.colorIntensity);
-    setStylization(item.params.stylization);
-    setContrast(item.params.contrast || 50);
-    setPatternScale(item.params.patternScale || 50);
-    setDitherLevel(item.params.ditherLevel || 0);
-    setModelType(item.params.modelType);
-    setUseCape(item.params.useCape || false);
-    setPalette(item.params.palette || "Default");
-    if (item.params.customColor) setCustomColor(item.params.customColor);
-    window.dispatchEvent(new CustomEvent('set-builder-prompt', { detail: item.params.prompt }));
-  }, []);
-
-  const handleUndo = useCallback(() => {
-    if (!canUndo) return;
-    const nextIndex = historyIndex + 1;
-    setHistoryIndex(nextIndex);
-    applyHistoryState(history[nextIndex]);
-    toast.info("State Reverted", { description: "Previous generation state applied." });
-  }, [canUndo, historyIndex, history, applyHistoryState]);
-
-  const handleRedo = useCallback(() => {
-    if (!canRedo) return;
-    const nextIndex = historyIndex - 1;
-    setHistoryIndex(nextIndex);
-    applyHistoryState(history[nextIndex]);
-    toast.info("State Restored", { description: "Next generation state applied." });
-  }, [canRedo, historyIndex, history, applyHistoryState]);
 
 
   const handleSaveCloud = async () => {
@@ -186,7 +137,6 @@ export default function SkinGenerator() {
         if (parsed.modelType) setModelType(parsed.modelType);
         if (parsed.detailLevel) setDetailLevel(parsed.detailLevel);
         if (parsed.compilationMode) setCompilationMode(parsed.compilationMode);
-        if (parsed.history) setHistory(parsed.history);
       } catch (e) {
         console.warn("Restore failed:", e);
       }
@@ -206,7 +156,7 @@ export default function SkinGenerator() {
     return await executeGeneration(prompt);
   };
 
-  const executeGeneration = async (prompt: string, bypassParams?: Partial<SkinHistoryItem['params']>) => {
+  const executeGeneration = async (prompt: string, bypassParams?: any) => {
     // Pipeline Lock: Prevent concurrent generation requests from corrupting the state
     if (isProcessing) {
       toast.warning("Operação em andamento", { description: "Aguarde a conclusão do processamento anterior." });
@@ -256,18 +206,7 @@ Execution Parameters:
 Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`;
       
       const updateHistory = (url: string) => {
-        const newItem: SkinHistoryItem = {
-          url,
-          params: {
-            prompt: activePrompt,
-            ...config
-          }
-        };
-        setHistory(prev => {
-          const currentValidHistory = historyIndex > 0 ? prev.slice(historyIndex) : prev;
-          return [newItem, ...currentValidHistory.filter(h => h.url !== url).slice(0, 5)];
-        });
-        setHistoryIndex(0);
+        addHistory(activePrompt, url, config);
       };
 
       if (!navigator.onLine) {
@@ -411,199 +350,172 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
   };
 
   const extraControls = useMemo(() => (
-    <div className="flex flex-col w-full gap-2 text-neutral-400 font-mono text-[10px]">
+    <div className="flex flex-col w-full gap-4 text-m3-on-surface-variant font-medium text-[11px]">
       <div className="flex flex-wrap items-center gap-4">
-         <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800">
-           <Accessibility className="w-3.5 h-3.5 text-emerald-500" />
-           <span className="font-bold uppercase tracking-widest text-neutral-500">Model Type</span>
-           <div className="flex gap-1 ml-2">
-             <button 
-               onClick={() => setModelType("classic")}
-               className={cn(
-                 "px-2 py-1 rounded transition-all text-[9px] font-black border",
-                 modelType === "classic" ? "bg-emerald-500/20 text-emerald-500 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]" : "bg-neutral-800/50 border-neutral-800 text-neutral-500 hover:text-white"
-               )}
-             >
-               CLASSIC
-             </button>
-             <button 
-               onClick={() => setModelType("slim")}
-               className={cn(
-                 "px-2 py-1 rounded transition-all text-[9px] font-black border",
-                 modelType === "slim" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]" : "bg-neutral-800/50 border-neutral-800 text-neutral-500 hover:text-white"
-               )}
-             >
-               SLIM
-             </button>
-           </div>
-         </div>
-
-         <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800">
-           <Shirt className="w-3.5 h-3.5 text-purple-500" />
-           <span className="font-bold uppercase tracking-widest text-neutral-500">Vanity</span>
-           <button 
-              onClick={() => setUseCape(!useCape)}
+         {/* Model Type Selector */}
+         <div className="flex bg-m3-surface-container rounded-full p-1 border border-m3-outline-variant">
+            <button 
+              onClick={() => setModelType("classic")}
               className={cn(
-                "px-2 py-1 rounded transition-all ml-2 text-[9px] font-black",
-                useCape ? "bg-purple-500/20 text-purple-400 border border-purple-500/30" : "hover:text-white"
-              )}
-           >
-             CAPE: {useCape ? "ACTIVE" : "NONE"}
-           </button>
-         </div>
-
-         <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800">
-           <PlusCircle className="w-3.5 h-3.5 text-orange-500" />
-           <span className="font-bold uppercase tracking-widest text-neutral-500">External Assets</span>
-           <div className="flex gap-2 ml-2">
-              <div className="relative">
-                <input 
-                  type="text" 
-                  placeholder="Skin URL..." 
-                  value={externalSkinUrl}
-                  onChange={(e) => setExternalSkinUrl(e.target.value)}
-                  className={cn(
-                    "bg-neutral-950 border rounded px-2 py-1 text-[9px] font-mono text-neutral-300 focus:outline-none w-24 lg:w-32 transition-colors",
-                    skinInputError ? "border-red-500/50 text-red-400 bg-red-500/5" : "border-neutral-800 focus:border-orange-500/50"
-                  )}
-                />
-                {skinInputError && externalSkinUrl && <div className="absolute -bottom-3 left-0 text-[7px] text-red-500 font-bold uppercase">Invalid_Skin</div>}
-              </div>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  placeholder="Cape URL..." 
-                  value={externalCapeUrl}
-                  onChange={(e) => setExternalCapeUrl(e.target.value)}
-                  className={cn(
-                    "bg-neutral-950 border rounded px-2 py-1 text-[9px] font-mono text-neutral-300 focus:outline-none w-24 lg:w-32 transition-colors",
-                    capeInputError ? "border-red-500/50 text-red-400 bg-red-500/5" : "border-neutral-800 focus:border-orange-500/50"
-                  )}
-                />
-                {capeInputError && externalCapeUrl && <div className="absolute -bottom-3 left-0 text-[7px] text-red-500 font-bold uppercase">Invalid_Cape</div>}
-              </div>
-              {(externalSkinUrl || externalCapeUrl) && (
-                <button 
-                  onClick={() => { setExternalSkinUrl(""); setExternalCapeUrl(""); setSkinInputError(false); setCapeInputError(false); }}
-                  className="text-neutral-600 hover:text-red-400 p-1 transition-colors"
-                  title="Clear external assets"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              )}
-           </div>
-         </div>
-
-         <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800">
-           <Monitor className="w-3.5 h-3.5 text-sky-500" />
-           <span className="font-bold uppercase tracking-widest text-neutral-500">Auto-Rotation</span>
-           <button 
-              onClick={() => setAutoRotate(!autoRotate)}
-              className={cn(
-                "px-3 py-1 rounded transition-all ml-2 text-[9px] font-black border",
-                autoRotate ? "bg-sky-500/20 text-sky-400 border-sky-500/30 shadow-[0_0_8px_rgba(14,165,233,0.2)]" : "bg-neutral-800/50 border-neutral-800 text-neutral-500 hover:text-white"
-              )}
-           >
-             {autoRotate ? "ACTIVE" : "PAUSED"}
-           </button>
-         </div>
-
-         <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800">
-           <Sliders className="w-3.5 h-3.5 text-amber-500" />
-           <span className="font-bold uppercase tracking-widest text-neutral-500">Compile Mode</span>
-           <div className="flex gap-1 ml-2">
-             <button 
-               onClick={() => {
-                 setCompilationMode("rapido");
-                 setDetailLevel(30);
-                 setColorIntensity(50);
-                 setStylization(30);
-                 setContrast(40);
-                 setPatternScale(70);
-                 setDitherLevel(0);
-                 toast.success("Modo Rápido", { description: "Geração focada em velocidade. Detalhes reduzidos."});
-               }}
-               className={cn(
-                 "px-2 py-1 rounded transition-all text-[9px] font-black border",
-                 compilationMode === "rapido" ? "bg-amber-500/20 text-amber-500 border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.2)]" : "bg-neutral-800/50 border-neutral-800 text-neutral-500 hover:text-white"
-               )}
-             >
-               FAST
-             </button>
-             <button 
-               onClick={() => {
-                 setCompilationMode("otimizado");
-                 setDetailLevel(60);
-                 setColorIntensity(60);
-                 setStylization(50);
-                 setContrast(50);
-                 setPatternScale(50);
-                 setDitherLevel(20);
-                 toast.success("Modo Otimizado", { description: "Equilíbrio entre qualidade e performance."});
-               }}
-               className={cn(
-                 "px-2 py-1 rounded transition-all text-[9px] font-black border",
-                 compilationMode === "otimizado" ? "bg-amber-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]" : "bg-neutral-800/50 border-neutral-800 text-neutral-500 hover:text-white"
-               )}
-             >
-               OPTIMIZED
-             </button>
-             <button 
-               onClick={() => {
-                 setCompilationMode("debug");
-                 setDetailLevel(100);
-                 setColorIntensity(100);
-                 setStylization(80);
-                 setContrast(80);
-                 setPatternScale(100);
-                 setDitherLevel(50);
-                 toast.success("Modo Debug", { description: "Detalhamento máximo habilitado. Maior custo computacional."});
-               }}
-               className={cn(
-                 "px-2 py-1 rounded transition-all text-[9px] font-black border",
-                 compilationMode === "debug" ? "bg-rose-500/20 text-rose-400 border-rose-500/30 shadow-[0_0_8px_rgba(244,63,94,0.2)]" : "bg-neutral-800/50 border-neutral-800 text-neutral-500 hover:text-white"
-               )}
-             >
-               DEBUG
-             </button>
-           </div>
-         </div>
-
-         {/* Documentation Toggle */}
-         <div className="ml-auto flex gap-2">
-           <button 
-              onClick={() => { setShowAdvanced(!showAdvanced); setShowDocs(false); }}
-              className={cn(
-                "flex items-center gap-2 p-1.5 px-3 rounded-lg border transition-colors",
-                showAdvanced 
-                  ? "bg-amber-500/20 border-amber-500/50 text-amber-400" 
-                  : "bg-neutral-900/50 border-neutral-800 text-neutral-400 hover:bg-neutral-800"
+                "px-4 py-2 rounded-full transition-all text-xs font-bold flex items-center gap-2",
+                modelType === "classic" ? "bg-m3-secondary-container text-m3-on-secondary-container" : "hover:bg-m3-surface-variant font-bold"
               )}
             >
-              <Sliders className="w-3.5 h-3.5" />
-              <span className="uppercase tracking-widest font-bold text-[10px]">Tuning</span>
+              <Accessibility className="w-3.5 h-3.5" /> Clássico
             </button>
             <button 
-              onClick={() => { setShowDocs(!showDocs); setShowAdvanced(false); }}
+              onClick={() => setModelType("slim")}
               className={cn(
-                "flex items-center gap-2 p-1.5 px-3 rounded-lg border transition-colors",
-                showDocs 
-                  ? "bg-purple-500/20 border-purple-500/50 text-purple-400" 
-                  : "bg-neutral-900/50 border-neutral-800 text-neutral-400 hover:bg-neutral-800"
+                "px-4 py-2 rounded-full transition-all text-xs font-bold flex items-center gap-2",
+                modelType === "slim" ? "bg-m3-secondary-container text-m3-on-secondary-container" : "hover:bg-m3-surface-variant font-bold"
               )}
             >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span className="uppercase tracking-widest font-bold text-[10px]">Styles</span>
+               Esguio
             </button>
+         </div>
+
+         {/* Feature Chips */}
+         <button 
+            onClick={() => setUseCape(!useCape)}
+            className={cn(
+              "flex items-center gap-3 px-4 h-10 rounded-full border transition-all text-xs font-bold",
+              useCape 
+                ? "bg-m3-tertiary-container text-m3-on-tertiary-container border-m3-tertiary shadow-m3-1" 
+                : "border-m3-outline text-m3-on-surface-variant hover:bg-m3-surface-variant"
+            )}
+         >
+           <Shirt className="w-4 h-4" /> Capa: {useCape ? "Ativa" : "Desligada"}
+         </button>
+
+         <div className="flex items-center gap-2">
+            <div className="relative group">
+              <input 
+                type="text" 
+                placeholder="Asset Skin (URL)" 
+                value={externalSkinUrl}
+                onChange={(e) => setExternalSkinUrl(e.target.value)}
+                className={cn(
+                  "bg-m3-surface border h-10 rounded-xl px-4 text-xs font-medium text-m3-on-surface focus:outline-none w-32 focus:ring-2 focus:ring-m3-primary/30 transition-all",
+                  skinInputError ? "border-m3-error text-m3-error" : "border-m3-outline focus:border-m3-primary"
+                )}
+              />
+              {skinInputError && externalSkinUrl && <div className="absolute -bottom-4 left-2 text-[8px] text-m3-error font-bold uppercase">Erro de Asset</div>}
+            </div>
+            {(externalSkinUrl || externalCapeUrl) && (
+              <button 
+                onClick={() => { setExternalSkinUrl(""); setExternalCapeUrl(""); setSkinInputError(false); setCapeInputError(false); }}
+                className="text-m3-error hover:bg-m3-error-container p-2 rounded-full transition-colors"
+                title="Limpar Assets"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+         </div>
+
+         <button 
+            onClick={() => setAutoRotate(!autoRotate)}
+            className={cn(
+              "flex items-center gap-2 px-4 h-10 rounded-full border transition-all text-xs font-bold",
+              autoRotate 
+                ? "bg-m3-secondary-container text-m3-on-secondary-container border-m3-secondary shadow-m3-1" 
+                : "border-m3-outline text-m3-on-surface-variant hover:bg-m3-surface-variant"
+            )}
+         >
+           <Monitor className="w-4 h-4" /> Auto-Rotação
+         </button>
+
+         <div className="h-6 w-[1px] bg-m3-outline-variant mx-1" />
+
+         {/* Compile Mode Selector */}
+         <div className="ml-auto flex bg-m3-surface-container rounded-full p-1 border border-m3-outline-variant">
+            <button 
+              onClick={() => {
+                setCompilationMode("rapido");
+                setDetailLevel(30);
+                setColorIntensity(50);
+                setStylization(30);
+                setContrast(40);
+                setPatternScale(70);
+                setDitherLevel(0);
+                toast.success("Modo Rápido Ativado");
+              }}
+              className={cn(
+                "px-4 py-2 rounded-full transition-all text-[10px] font-black uppercase tracking-wider",
+                compilationMode === "rapido" ? "bg-m3-tertiary text-m3-on-tertiary" : "text-m3-on-surface-variant hover:bg-m3-surface-variant"
+              )}
+            >
+              Rápido
+            </button>
+            <button 
+              onClick={() => {
+                setCompilationMode("otimizado");
+                setDetailLevel(60);
+                setColorIntensity(60);
+                setStylization(50);
+                setContrast(50);
+                setPatternScale(50);
+                setDitherLevel(20);
+                toast.success("Modo Otimizado Ativado");
+              }}
+              className={cn(
+                "px-4 py-2 rounded-full transition-all text-[10px] font-black uppercase tracking-wider",
+                compilationMode === "otimizado" ? "bg-m3-primary text-m3-on-primary" : "text-m3-on-surface-variant hover:bg-m3-surface-variant"
+              )}
+            >
+              Otimizado
+            </button>
+            <button 
+              onClick={() => {
+                setCompilationMode("debug");
+                setDetailLevel(100);
+                setColorIntensity(100);
+                setStylization(80);
+                setContrast(80);
+                setPatternScale(100);
+                setDitherLevel(50);
+                toast.success("Modo Debug Ativado");
+              }}
+              className={cn(
+                "px-4 py-2 rounded-full transition-all text-[10px] font-black uppercase tracking-wider",
+                compilationMode === "debug" ? "bg-m3-error text-m3-on-error" : "text-m3-on-surface-variant hover:bg-m3-surface-variant"
+              )}
+            >
+              Debug
+            </button>
+         </div>
+
+         <div className="flex gap-2 ml-2">
+            <button 
+               onClick={() => { setShowAdvanced(!showAdvanced); setShowDocs(false); }}
+               className={cn(
+                 "flex items-center gap-2 h-10 px-4 rounded-full border font-bold text-xs transition-all",
+                 showAdvanced 
+                   ? "bg-m3-secondary-container text-m3-on-secondary-container border-m3-secondary" 
+                   : "border-m3-outline text-m3-on-surface-variant hover:bg-m3-surface-variant"
+               )}
+             >
+               <Sliders className="w-4 h-4" /> Ajustes
+             </button>
+             <button 
+               onClick={() => { setShowDocs(!showDocs); setShowAdvanced(false); }}
+               className={cn(
+                 "flex items-center gap-2 h-10 px-4 rounded-full border font-bold text-xs transition-all",
+                 showDocs 
+                   ? "bg-m3-secondary-container text-m3-on-secondary-container border-m3-secondary" 
+                   : "border-m3-outline text-m3-on-surface-variant hover:bg-m3-surface-variant"
+               )}
+             >
+               <BookOpen className="w-4 h-4" /> Guia
+             </button>
           </div>
       </div>
       
       {showAdvanced && (
-        <div className="bg-neutral-900/50 border border-neutral-800 p-4 rounded-lg text-xs animate-in fade-in slide-in-from-top-2 mt-2">
-          <div className="flex items-center justify-between mb-4 pb-2 border-b border-neutral-800/50">
-            <h4 className="text-amber-400 font-bold uppercase tracking-widest flex items-center gap-2">
-              <Sliders className="w-4 h-4" /> 
-              Advanced Tuning Parameters
+        <div className="bg-m3-surface-container-low border border-m3-outline-variant p-6 rounded-[2rem] text-sm animate-in fade-in slide-in-from-top-4 mt-2 shadow-m3-2">
+          <div className="flex items-center justify-between mb-6">
+            <h4 className="text-m3-on-surface font-black uppercase tracking-widest flex items-center gap-3">
+              <Sliders className="w-5 h-5 text-m3-primary" /> 
+              Parâmetros de Refinamento
             </h4>
             <div className="flex gap-2">
               <button 
@@ -614,11 +526,10 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
                   setContrast(Math.floor(Math.random() * 101));
                   setPatternScale(Math.floor(Math.random() * 101));
                   setDitherLevel(Math.floor(Math.random() * 101));
-                  toast.success("RNG Balanced", { description: "Randomized all weightings." });
                 }}
-                className="text-[8px] font-black uppercase tracking-widest text-neutral-500 hover:text-sky-400 transition-colors px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-md"
+                className="text-[10px] font-bold uppercase px-4 py-2 bg-m3-surface border border-m3-outline rounded-full text-m3-on-surface-variant hover:bg-m3-surface-variant transition-all focus:ring-2 ring-m3-primary"
               >
-                Randomize
+                Aleatório
               </button>
               <button 
                 onClick={() => {
@@ -628,91 +539,51 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
                   setContrast(50);
                   setPatternScale(50);
                   setDitherLevel(0);
-                  toast.info("Factory Reset", { description: "Restored nominal parameter baseline." });
                 }}
-                className="text-[8px] font-black uppercase tracking-widest text-neutral-500 hover:text-red-400 transition-colors px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-md"
+                className="text-[10px] font-bold uppercase px-4 py-2 bg-m3-surface border border-m3-outline rounded-full text-m3-on-surface-variant hover:bg-m3-surface-variant transition-all focus:ring-2 ring-m3-primary"
               >
-                Reset
+                Resetar
               </button>
             </div>
           </div>
 
-          {/* Quick Presets */}
-          <div className="flex flex-wrap gap-2 mb-6 p-2 bg-neutral-950/50 rounded-xl border border-neutral-800">
-             <div className="text-[8px] font-black uppercase tracking-widest text-neutral-600 self-center px-2 border-r border-neutral-800 mr-1">Presets</div>
-             {[
-               { name: "Super Flat", detail: 10, intensity: 40, style: 20, cont: 30, scale: 30, dither: 0, color: "text-blue-400", bg: "bg-blue-500/10" },
-               { name: "High Detail", detail: 90, intensity: 60, style: 40, cont: 60, scale: 40, dither: 20, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-               { name: "Neon Vibrant", detail: 60, intensity: 95, style: 80, cont: 85, scale: 50, dither: 10, color: "text-pink-400", bg: "bg-pink-500/10" },
-               { name: "Retro Pixel", detail: 40, intensity: 50, style: 30, cont: 70, scale: 80, dither: 90, color: "text-amber-400", bg: "bg-amber-500/10" },
-               { name: "Brutalist", detail: 80, intensity: 20, style: 10, cont: 95, scale: 100, dither: 50, color: "text-neutral-300", bg: "bg-neutral-100/10" }
-             ].map((p, i) => (
-               <button 
-                key={i}
-                onClick={() => {
-                  setDetailLevel(p.detail);
-                  setColorIntensity(p.intensity);
-                  setStylization(p.style);
-                  setContrast(p.cont);
-                  setPatternScale(p.scale);
-                  setDitherLevel(p.dither);
-                  toast.info(`Preset: ${p.name}`, { description: "Parameters calibrated." });
-                }}
-                className={cn("px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95 border border-transparent hover:border-white/10", p.color, p.bg)}
-               >
-                 {p.name}
-               </button>
-             ))}
-          </div>
-          
-          {/* Color Palettes Section */}
-          <div className="mb-8 p-4 bg-neutral-950/50 rounded-xl border border-neutral-800">
-             <div className="flex items-center gap-2 mb-4">
-                <div className="w-1 h-3 bg-sky-500 rounded-full" />
-                <h5 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Color Presets</h5>
+          <div className="mt-8 p-6 bg-m3-surface rounded-2xl border border-m3-outline-variant shadow-inner">
+             <div className="flex items-center gap-3 mb-4">
+                <div className="w-1.5 h-4 bg-m3-primary rounded-full" />
+                <h5 className="text-[11px] font-black uppercase tracking-widest text-m3-on-surface">Paleta de Frequências</h5>
              </div>
 
-             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+             <div className="flex flex-wrap gap-3">
                 {[
                   { name: "Default", colors: ["#555", "#888", "#aaa"] },
                   { name: "Obsidian", colors: ["#0a0a0a", "#1a1a1a", "#333"] },
                   { name: "Solaris", colors: ["#ff9900", "#ffcc00", "#550000"] },
                   { name: "Aether", colors: ["#00f2ff", "#0066ff", "#ffffff"] },
                   { name: "Toxic", colors: ["#39ff14", "#004400", "#ffffff"] },
-                  { name: "Royal", colors: ["#800080", "#ffd700", "#ffffff"] },
                   { name: "Frost", colors: ["#e0ffff", "#1e90ff", "#ffffff"] },
                 ].map((p) => (
                   <button 
                     key={p.name}
-                    onClick={() => {
-                      setPalette(p.name);
-                      toast.success(`Palette Linked: ${p.name}`, { 
-                        description: "Color settings adjusted for specific profiles.",
-                        icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      });
-                    }}
+                    onClick={() => setPalette(p.name)}
                     className={cn(
-                      "flex flex-col items-center gap-2 p-2 rounded-lg border transition-all hover:bg-neutral-900 group/palette",
-                      palette === p.name ? "bg-sky-500/10 border-sky-500/40" : "bg-black/20 border-neutral-800"
+                      "flex items-center gap-3 p-3 rounded-xl border transition-all hover:bg-m3-surface-variant group/palette",
+                      palette === p.name ? "bg-m3-secondary-container border-m3-secondary" : "bg-m3-surface border-m3-outline-variant"
                     )}
                   >
                     <div className="flex -space-x-1.5">
                        {p.colors.map((c, idx) => (
-                         <div key={idx} className="w-4 h-4 rounded-full border border-black shadow-sm" style={{ backgroundColor: c }} />
+                         <div key={idx} className="w-4 h-4 rounded-full border border-m3-on-surface/10" style={{ backgroundColor: c }} />
                        ))}
                     </div>
-                    <span className={cn(
-                      "text-[8px] font-black uppercase tracking-widest",
-                      palette === p.name ? "text-sky-400" : "text-neutral-600 group-hover/palette:text-neutral-400"
-                    )}>
+                    <span className="text-[10px] font-bold text-m3-on-surface group-hover/palette:text-m3-primary transition-colors">
                       {p.name}
                     </span>
                   </button>
                 ))}
                 
                 {/* Custom Color Picker */}
-                <div className="flex flex-col items-center gap-2 p-2 rounded-lg border border-neutral-800 bg-black/20 group/custom">
-                  <div className="relative w-7 h-7 rounded-full border border-neutral-700 overflow-hidden shadow-inner">
+                <div className="flex items-center gap-3 p-3 rounded-xl border border-m3-outline-variant bg-m3-surface">
+                  <div className="relative w-6 h-6 rounded-full border border-m3-outline overflow-hidden">
                     <input 
                       type="color" 
                       value={customColor} 
@@ -720,217 +591,104 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
                         setCustomColor(e.target.value);
                         setPalette("Custom");
                       }}
-                      className="absolute inset-x-[-50%] inset-y-[-50%] w-[200%] h-[200%] cursor-pointer border-none p-0 bg-transparent"
+                      className="absolute inset-x-[-100%] inset-y-[-100%] w-[300%] h-[300%] cursor-pointer border-none p-0 bg-transparent scale-150"
                     />
                   </div>
-                  <span className={cn(
-                    "text-[8px] font-black uppercase tracking-widest",
-                    palette === "Custom" ? "text-amber-400" : "text-neutral-600 group-hover/custom:text-neutral-400"
-                  )}>
-                    Custom
-                  </span>
+                  <span className="text-[10px] font-bold text-m3-on-surface-variant">Customizado</span>
                 </div>
              </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6 text-neutral-400">
-            {/* Column 1: Core Rendering */}
-            <div className="space-y-4">
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="uppercase font-bold text-[9px] tracking-[0.2em] text-neutral-500">Detail Level</label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" min="0" max="100" 
-                      value={detailLevel} 
-                      onChange={e => setDetailLevel(Number(e.target.value))}
-                      className="w-12 bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[10px] font-mono text-emerald-400 focus:outline-none focus:border-emerald-500/50"
-                    />
-                    <span className="text-emerald-400 font-mono text-[10px]">%</span>
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-m3-on-surface-variant">
+            {[
+              { label: "Nível de Detalhe", value: detailLevel, setter: setDetailLevel, color: "m3-primary", hint: "Granularidade da superfície." },
+              { label: "Intensidade de Cor", value: colorIntensity, setter: setColorIntensity, color: "m3-secondary", hint: "Saturação da matriz de pigmento." },
+              { label: "Estilização", value: stylization, setter: setStylization, color: "m3-tertiary", hint: "Desvio artístico da base." },
+              { label: "Contraste", value: contrast, setter: setContrast, color: "m3-primary", hint: "Equilíbrio entre luz e sombras." },
+              { label: "Escala de Padrão", value: patternScale, setter: setPatternScale, color: "m3-secondary", hint: "Dimensão das texturas procedurais." },
+              { label: "Dither (Ruído)", value: ditherLevel, setter: setDitherLevel, color: "m3-tertiary", hint: "Transições retro-pixeladas." },
+            ].map((param, i) => (
+              <div key={i} className="space-y-3">
+                <div className="flex justify-between items-center px-1">
+                  <label className="uppercase font-bold text-[10px] tracking-widest text-m3-on-surface-variant">{param.label}</label>
+                  <span className={cn("font-bold text-xs px-2 py-0.5 rounded-full bg-m3-surface", `text-${param.color}`)}>{param.value}%</span>
                 </div>
                 <input 
                   type="range" min="0" max="100" 
-                  value={detailLevel} 
-                  onChange={e => setDetailLevel(Number(e.target.value))}
-                  className="w-full accent-emerald-500 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer" 
+                  value={param.value} 
+                  onChange={e => param.setter(Number(e.target.value))}
+                  className={cn(
+                    "w-full h-10 accent-m3-primary appearance-none cursor-pointer bg-transparent",
+                    "[&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-m3-surface-variant",
+                    "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full md:[&::-webkit-slider-thumb]:-translate-y-1.5 [&::-webkit-slider-thumb]:bg-m3-primary [&::-webkit-slider-thumb]:shadow-m3-1 [&::-webkit-slider-thumb]:transition-all active:[&::-webkit-slider-thumb]:scale-125"
+                  )} 
                 />
-                <p className="text-[8px] text-neutral-600 leading-tight uppercase font-bold tracking-tighter">Micro-noise & surface granularity control.</p>
+                <p className="text-[9px] text-m3-on-surface-variant/60 uppercase font-black tracking-tighter pl-1">{param.hint}</p>
               </div>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="uppercase font-bold text-[9px] tracking-[0.2em] text-neutral-500">Stylization Strength</label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" min="0" max="100" 
-                      value={stylization} 
-                      onChange={e => setStylization(Number(e.target.value))}
-                      className="w-12 bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[10px] font-mono text-purple-400 focus:outline-none focus:border-purple-500/50"
-                    />
-                    <span className="text-purple-400 font-mono text-[10px]">%</span>
-                  </div>
-                </div>
-                <input 
-                  type="range" min="0" max="100" 
-                  value={stylization} 
-                  onChange={e => setStylization(Number(e.target.value))}
-                  className="w-full accent-purple-500 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer" 
-                />
-                <p className="text-[8px] text-neutral-600 leading-tight uppercase font-bold tracking-tighter">Artistic deviation from realism baseline.</p>
-              </div>
-            </div>
-
-            {/* Column 2: Color & Optics */}
-            <div className="space-y-4">
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="uppercase font-bold text-[9px] tracking-[0.2em] text-neutral-500">Color Palette Intensity</label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" min="0" max="100" 
-                      value={colorIntensity} 
-                      onChange={e => setColorIntensity(Number(e.target.value))}
-                      className="w-12 bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[10px] font-mono text-sky-400 focus:outline-none focus:border-sky-500/50"
-                    />
-                    <span className="text-sky-400 font-mono text-[10px]">%</span>
-                  </div>
-                </div>
-                <input 
-                  type="range" min="0" max="100" 
-                  value={colorIntensity} 
-                  onChange={e => setColorIntensity(Number(e.target.value))}
-                  className="w-full accent-sky-500 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer" 
-                />
-                <p className="text-[8px] text-neutral-600 leading-tight uppercase font-bold tracking-tighter">Saturation and intensity of the pigment matrix.</p>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="uppercase font-bold text-[9px] tracking-[0.2em] text-neutral-500">Contrast Ratio</label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" min="0" max="100" 
-                      value={contrast} 
-                      onChange={e => setContrast(Number(e.target.value))}
-                      className="w-12 bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[10px] font-mono text-amber-400 focus:outline-none focus:border-amber-500/50"
-                    />
-                    <span className="text-amber-400 font-mono text-[10px]">%</span>
-                  </div>
-                </div>
-                <input 
-                  type="range" min="0" max="100" 
-                  value={contrast} 
-                  onChange={e => setContrast(Number(e.target.value))}
-                  className="w-full accent-amber-500 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer" 
-                />
-                <p className="text-[8px] text-neutral-600 leading-tight uppercase font-bold tracking-tighter">Adjusts the intensity of highlights and shadows.</p>
-              </div>
-            </div>
-
-            {/* Column 3: Material & Texture */}
-            <div className="space-y-4">
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="uppercase font-bold text-[9px] tracking-[0.2em] text-neutral-500">Pattern Scale</label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" min="0" max="100" 
-                      value={patternScale} 
-                      onChange={e => setPatternScale(Number(e.target.value))}
-                      className="w-12 bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[10px] font-mono text-pink-400 focus:outline-none focus:border-pink-500/50"
-                    />
-                    <span className="text-pink-400 font-mono text-[10px]">%</span>
-                  </div>
-                </div>
-                <input 
-                  type="range" min="0" max="100" 
-                  value={patternScale} 
-                  onChange={e => setPatternScale(Number(e.target.value))}
-                  className="w-full accent-pink-500 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer" 
-                />
-                <p className="text-[8px] text-neutral-600 leading-tight uppercase font-bold tracking-tighter">Size of procedural textures and patterns.</p>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="uppercase font-bold text-[9px] tracking-[0.2em] text-neutral-500">Dither Level</label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" min="0" max="100" 
-                      value={ditherLevel} 
-                      onChange={e => setDitherLevel(Number(e.target.value))}
-                      className="w-12 bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[10px] font-mono text-emerald-400 focus:outline-none focus:border-emerald-500/50"
-                    />
-                    <span className="text-emerald-400 font-mono text-[10px]">%</span>
-                  </div>
-                </div>
-                <input 
-                  type="range" min="0" max="100" 
-                  value={ditherLevel} 
-                  onChange={e => setDitherLevel(Number(e.target.value))}
-                  className="w-full accent-emerald-500 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer" 
-                />
-                <p className="text-[8px] text-neutral-600 leading-tight uppercase font-bold tracking-tighter">Retro-pixelated color transition blending.</p>
-              </div>
-            </div>
-
+            ))}
           </div>
         </div>
       )}
 
       {showDocs && (
-        <div className="bg-neutral-900/50 border border-neutral-800 p-4 rounded-lg text-xs text-neutral-400 leading-relaxed animate-in fade-in slide-in-from-top-2 mt-2">
-          <h4 className="text-purple-400 font-bold mb-3 uppercase tracking-widest flex items-center gap-2">
-            <BookOpen className="w-4 h-4" /> 
-            Skin Generation Keyword Guide
+        <div className="bg-m3-surface-container border border-m3-outline-variant p-6 rounded-[2rem] text-sm animate-in fade-in slide-in-from-top-4 mt-2 shadow-m3-2">
+          <h4 className="text-m3-primary font-black mb-6 uppercase tracking-widest flex items-center gap-3">
+            <BookOpen className="w-5 h-5" /> 
+            Guia de Estilos e Keywords
           </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-3">
-              <div>
-                <strong className="text-white block mb-1">Cyberpunk & Sci-Fi</strong> 
-                Use keywords like <code>cybernetic implants</code>, <code>neon green glowing visor</code>, <code>tactical exoskeleton</code>, <code>holographic details</code> to get high-tech looks.
-                <div className="mt-2 text-neutral-500 bg-neutral-950/50 p-2 rounded">
-                  <span className="text-purple-500/70 font-semibold mb-1 block uppercase text-[9px] tracking-widest">Example Prompt</span>
-                  "A futuristic netrunner with a glowing blue visor, chrome robotic arm, and glowing tactical jacket"
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <div className="p-4 bg-m3-surface rounded-2xl border border-m3-outline-variant">
+                <strong className="text-m3-on-surface block mb-2 font-black text-xs uppercase tracking-wider">Cyberpunk & Sci-Fi</strong> 
+                <p className="text-m3-on-surface-variant text-[11px] leading-relaxed">
+                  Utilize: <code>implantes cibernéticos</code>, <code>visor neon brilhante</code>, <code>exoesqueleto tático</code>, <code>detalhes holográficos</code>.
+                </p>
+                <div className="mt-3 p-3 bg-m3-secondary-container/30 rounded-xl border border-m3-secondary/20">
+                  <span className="text-m3-secondary font-black mb-1 block uppercase text-[9px] tracking-widest">Exemplo de Prompt</span>
+                  <p className="text-m3-on-secondary-container text-xs italic italic tracking-tight italic">"Um netrunner futurista com visor azul brilhante, braço robótico de cromo e jaqueta tática iluminada"</p>
                 </div>
               </div>
-              <div>
-                <strong className="text-white block mb-1">Fantasy & Medieval</strong> 
-                Try words like <code>corrupted dark knight</code>, <code>elven ranger cloak</code>, <code>gilded golden armor</code>, <code>mystical runes</code>.
-                <div className="mt-2 text-neutral-500 bg-neutral-950/50 p-2 rounded">
-                  <span className="text-purple-500/70 font-semibold mb-1 block uppercase text-[9px] tracking-widest">Example Prompt</span>
-                  "An ancient elven druid wearing green mossy robes, glowing emerald eyes, and antler crown"
+              <div className="p-4 bg-m3-surface rounded-2xl border border-m3-outline-variant">
+                <strong className="text-m3-on-surface block mb-2 font-black text-xs uppercase tracking-wider">Fantasia & Medieval</strong> 
+                <p className="text-m3-on-surface-variant text-[11px] leading-relaxed">
+                  Tente: <code>cavaleiro negro corrompido</code>, <code>capa de ranger élfico</code>, <code>armadura dourada ornamentada</code>, <code>runas místicas</code>.
+                </p>
+                <div className="mt-3 p-3 bg-m3-tertiary-container/30 rounded-xl border border-m3-tertiary/20">
+                  <span className="text-m3-tertiary font-black mb-1 block uppercase text-[9px] tracking-widest">Exemplo de Prompt</span>
+                   <p className="text-m3-on-tertiary-container text-xs italic italic tracking-tight italic">"Um druida élfico ancestral vestindo túnicas de musgo verde, olhos esmeralda brilhantes e coroa de galhos"</p>
                 </div>
               </div>
             </div>
-            <div>
-               <strong className="text-white block mb-1">Other Styles:</strong> 
-               <ul className="list-none space-y-3 mt-2">
-                  <li className="flex flex-col gap-1">
-                    <div className="flex gap-2"><span className="text-purple-500 font-bold">Retro Sci-fi</span> Space suits, bubble helmets, orange stripes, 80s aesthetics.</div>
-                    <div className="text-[10px] text-neutral-500 italic">Ex: "1980s astronaut with orange and white spacesuit, gold mirrored visor"</div>
+            <div className="p-6 bg-m3-surface-container-high rounded-2xl border border-m3-outline-variant">
+               <strong className="text-m3-on-surface block mb-4 font-black text-xs uppercase tracking-wider">Outras Categorias:</strong> 
+               <ul className="list-none space-y-6">
+                  <li className="flex flex-col gap-2">
+                    <div className="flex gap-2 items-center"><div className="w-1.5 h-1.5 bg-m3-primary rounded-full"/><span className="text-m3-primary font-black uppercase text-[10px] tracking-widest">Retro Sci-fi</span></div>
+                    <p className="text-[11px] text-m3-on-surface-variant">Trajes espaciais, capacetes de bolha, listras laranjas, estética dos anos 80.</p>
                   </li>
-                  <li className="flex flex-col gap-1">
-                    <div className="flex gap-2"><span className="text-purple-500 font-bold">Steampunk</span> Brass goggles, leather coats, clockwork limbs, top hats.</div>
-                    <div className="text-[10px] text-neutral-500 italic">Ex: "Victorian inventor with brass goggles, leather longcoat, and mechanical arm"</div>
+                  <li className="flex flex-col gap-2">
+                    <div className="flex gap-2 items-center"><div className="w-1.5 h-1.5 bg-m3-secondary rounded-full"/><span className="text-m3-secondary font-black uppercase text-[10px] tracking-widest">Steampunk</span></div>
+                    <p className="text-[11px] text-m3-on-surface-variant">Goggles de latão, sobretudos de couro, membros mecânicos, cartolas.</p>
                   </li>
-                  <li className="flex flex-col gap-1">
-                    <div className="flex gap-2"><span className="text-purple-500 font-bold">Streetwear</span> Oversized hoodies, high-top sneakers, chains, masks.</div>
-                    <div className="text-[10px] text-neutral-500 italic">Ex: "Urban skater wearing oversized black hoodie, gold chains, and oni mask"</div>
+                  <li className="flex flex-col gap-2">
+                    <div className="flex gap-2 items-center"><div className="w-1.5 h-1.5 bg-m3-tertiary rounded-full"/><span className="text-m3-tertiary font-black uppercase text-[10px] tracking-widest">Streetwear</span></div>
+                    <p className="text-[11px] text-m3-on-surface-variant">Hoodies oversized, sneakers cano alto, correntes, máscaras.</p>
                   </li>
                </ul>
             </div>
           </div>
           
-          <div className="mt-4 pt-4 border-t border-neutral-800">
-            <strong className="text-white block mb-2">⚡ Recommended Keywords for Detail:</strong>
+          <div className="mt-8 pt-6 border-t border-m3-outline-variant">
+            <strong className="text-m3-on-surface block mb-4 font-black text-xs uppercase tracking-[0.2em] opacity-60">⚡ Keywords Recomendadas para Detalhes:</strong>
             <div className="flex flex-wrap gap-2">
               {[
-                "glowing eyes", "hooded", "tattered cape", "metallic plates", 
-                "goggles", "masked", "horns", "cyborg", "demon", "angelic", 
-                "tactical belt", "puffer jacket", "robotic arm", "undead"
+                "olhos brilhantes", "encapuzado", "capa rasgada", "placas metálicas", 
+                "goggles", "mascarado", "chifres", "cyborg", "demoníaco", "angelical", 
+                "cinto tático", "jaqueta puffer", "braço robótico", "morto-vivo"
               ].map((k, i) => (
                 <span 
                   key={i} 
-                  className="px-2 py-1 rounded text-[10px] font-mono bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                  className="px-4 py-2 rounded-full text-[10px] font-bold bg-m3-secondary-container text-m3-on-secondary-container border border-m3-secondary/20 hover:bg-m3-secondary hover:text-m3-on-secondary transition-colors cursor-default"
                 >
                   {k}
                 </span>
@@ -941,38 +699,6 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
       )}
     </div>
   ), [modelType, compilationMode, autoRotate, useCape, showDocs, showAdvanced, detailLevel, colorIntensity, stylization, contrast, patternScale, ditherLevel, externalSkinUrl, externalCapeUrl]);
-
-  const handleRegenerate = (item: SkinHistoryItem) => {
-    toast.promise(executeGeneration(item.params.prompt, item.params), {
-      loading: "Gerando nova versão...",
-      success: "Skin regenerada com sucesso!",
-      error: "Falha na regeneração"
-    });
-  };
-
-  const handleUseAsBase = (item: SkinHistoryItem) => {
-    setCurrentSkinUrl(item.url);
-    setDetailLevel(item.params.detailLevel);
-    setColorIntensity(item.params.colorIntensity);
-    setStylization(item.params.stylization);
-    setContrast(item.params.contrast || 50);
-    setPatternScale(item.params.patternScale || 50);
-    setDitherLevel(item.params.ditherLevel || 0);
-    setModelType(item.params.modelType);
-    setUseCape(item.params.useCape || false);
-    setPalette(item.params.palette || "Default");
-    if (item.params.customColor) setCustomColor(item.params.customColor);
-    window.dispatchEvent(new CustomEvent('set-builder-prompt', { detail: item.params.prompt }));
-    toast.success("Blueprint Carregado", { 
-      description: "Parâmetros e prompt restaurados para edição.",
-      icon: <PlusCircle className="w-4 h-4 text-emerald-500" />
-    });
-  };
-
-  const handleDeleteHistory = (idx: number) => {
-    setHistory(prev => prev.filter((_, i) => i !== idx));
-    toast.info("Fragmento Deletado", { description: "Setor de memória limpo." });
-  };
 
   const outputContent = useCallback((result: string | null, isGenerating: boolean) => {
     const skinToDisplay = (externalSkinUrl && !skinInputError) ? externalSkinUrl : (result || currentSkinUrl);
@@ -987,224 +713,170 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
     }
 
     return (
-      <div className={cn(
-        "flex flex-col lg:flex-row gap-12 items-center justify-center p-8 w-full h-full max-w-6xl mx-auto transition-all duration-500",
-        isGenerating ? "opacity-50 grayscale" : "opacity-100"
-      )}>
-        {/* 3D Interactive Viewer */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 w-full lg:w-1/2">
-           <div className="flex items-center gap-3 bg-neutral-900/50 px-4 py-2 rounded-full border border-neutral-800 text-emerald-400 font-mono text-[10px] tracking-[0.2em] font-bold uppercase shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-              <User className="w-4 h-4" /> Model_Type: <span className="text-white">{modelType.toUpperCase()}</span>
-           </div>
-           
-           <div className="relative group w-full aspect-[4/5] max-w-[400px]">
-             {isGenerating && (
-               <div className="absolute inset-0 z-20 flex items-center justify-center bg-neutral-950/60 backdrop-blur-md rounded-2xl border border-emerald-500/20">
-                 <div className="flex flex-col items-center gap-4">
-                    <div className="relative">
-                      <Loader2 className="w-12 h-12 animate-spin text-emerald-500" />
-                      <div className="absolute inset-0 blur-lg bg-emerald-500/20 animate-pulse" />
-                    </div>
-                    <span className="text-xs font-mono text-emerald-500 animate-pulse uppercase tracking-[0.4em] font-black">Processing_Pixels...</span>
-                 </div>
-               </div>
-             )}
-             <div className="absolute -inset-8 bg-emerald-500/5 blur-[100px] rounded-full opacity-0 group-hover:opacity-60 transition-opacity duration-1000" />
-             <SkinViewer3D 
-               skinUrl={skinToDisplay} 
-               modelType={modelType} 
-               autoRotate={autoRotate} 
-               capeUrl={(externalCapeUrl && !capeInputError) ? externalCapeUrl : (useCape ? "https://textures.minecraft.net/texture/235338386f91ad18485293297a7a13d705c56c2fbd401a88b5ba805b5f25a3d" : undefined)} 
-             />
-             
-             {/* Interaction Hint Overlay */}
-             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 backdrop-blur-sm px-3 py-1 rounded-full border border-white/10 text-[9px] text-white/50 font-mono uppercase tracking-widest pointer-events-none">
-                Drag to Rotate • Scroll to Zoom
-             </div>
-           </div>
-
-           {/* Real-time Telemetry Section */}
-           {telemetryLogs.length > 0 && (
-             <div className="w-full max-w-[400px] bg-black/40 border border-neutral-800 rounded-xl p-3 font-mono text-[9px] space-y-1.5 overflow-hidden animate-in fade-in slide-in-from-bottom-2">
-               <div className="flex items-center justify-between mb-2 text-neutral-600 border-b border-neutral-800 pb-1">
-                 <span className="font-black uppercase tracking-widest">Process_Telemetry</span>
-                 <span className="text-[7px]">v2.4_Audit</span>
-               </div>
-               {telemetryLogs.map((log) => (
-                 <div key={log.id} className="flex gap-2 animate-in slide-in-from-left-1">
-                   <span className="text-neutral-700">[{new Date().toTimeString().split(' ')[0]}]</span>
-                   <span className={cn(
-                     "font-bold uppercase tracking-tight",
-                     log.type === 'info' ? 'text-sky-500' : log.type === 'success' ? 'text-emerald-500' : 'text-amber-500'
-                   )}>
-                     {log.type === 'info' ? '>>' : log.type === 'success' ? 'OK' : '!!'} {log.msg}
-                   </span>
-                 </div>
-               ))}
-             </div>
-           )}
-
-           <div className="flex flex-col gap-3 w-full max-w-[400px]">
-             <button
-               onClick={() => handleDownload(skinToDisplay)}
-               disabled={isExporting}
-               className={cn(
-                 "flex w-full justify-center items-center gap-4 px-10 py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all rounded-xl text-white font-bold text-sm uppercase tracking-[0.2em] shadow-[0_0_35px_rgba(16,185,129,0.4)] border border-emerald-400/30 group relative overflow-hidden",
-                 isExporting && "opacity-50 cursor-not-allowed"
-               )}
-             >
-               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-               {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <DownloadIcon className="w-5 h-5 relative z-10 group-hover:animate-bounce" />}
-               <span className="relative z-10">{isExporting ? "Exporting..." : "Export_Binary_Skin"}</span>
-             </button>
-
-             <button
-               onClick={handleSaveCloud}
-               disabled={isSavingCloud}
-               data-action="save"
-               className={cn(
-                 "flex w-full justify-center items-center gap-4 px-10 py-3 bg-neutral-900 hover:bg-neutral-800 active:scale-95 transition-all rounded-xl text-emerald-400 font-bold text-xs uppercase tracking-[0.2em] shadow-lg border border-emerald-500/20 group relative overflow-hidden",
-                 isSavingCloud && "opacity-50 cursor-not-allowed"
-               )}
-             >
-               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-500/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-               {isSavingCloud ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4 relative z-10 group-hover:-translate-y-1 transition-transform" />}
-               <span className="relative z-10">{isSavingCloud ? "Saving..." : "Save to Cloud Vault"}</span>
-             </button>
-           </div>
-        </div>
-
-        {/* Flat Texture & Exporter */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-8 w-full lg:w-1/2 border-t lg:border-t-0 lg:border-l border-neutral-800/50 pt-8 lg:pt-0 lg:pl-12">
-          <div className="space-y-2 text-center">
-            <h3 className="text-neutral-500 font-mono text-[10px] tracking-widest uppercase font-bold">UV_Map_Layout</h3>
-            <p className="text-[10px] text-neutral-700 font-mono italic">"The blueprint of existence"</p>
-          </div>
-          
-          <div className="relative p-2 bg-neutral-800 rounded-xl shadow-2xl border border-neutral-700/50 group/texture">
-            <div 
-              className="w-64 h-64 bg-neutral-950 rounded-lg overflow-hidden cursor-crosshair"
-              style={{
-                backgroundImage: `url("${skinToDisplay}")`,
-                backgroundSize: '100% 100%',
-                backgroundRepeat: 'no-repeat',
-                imageRendering: 'pixelated'
-              }}
-            />
-            <div className="absolute -top-3 -right-3 w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center border-4 border-neutral-950 text-white font-bold text-[12px] shadow-lg">
-              OK
-            </div>
-            <div className="absolute inset-0 bg-emerald-500/10 opacity-0 group-hover/texture:opacity-100 transition-opacity pointer-events-none" />
-          </div>
-          
-          <div className="flex flex-col gap-4 w-full max-w-[320px]">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-4 bg-neutral-900/50 border border-neutral-800 rounded-xl text-center">
-                <div className="text-neutral-600 text-[8px] font-bold uppercase mb-1 tracking-tighter">Bit_Depth</div>
-                <div className="text-emerald-500 font-mono text-sm">8-BIT</div>
-              </div>
-              <div className="p-4 bg-neutral-900/50 border border-neutral-800 rounded-xl text-center">
-                <div className="text-neutral-600 text-[8px] font-bold uppercase mb-1 tracking-tighter">Buffer_Mode</div>
-                <div className="text-emerald-500 font-mono text-sm">RGBA</div>
-              </div>
-            </div>
-            
-            <div className="p-4 bg-neutral-900/50 border border-neutral-800 rounded-xl flex items-center justify-between px-6">
-               <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Dimension</span>
-               <span className="text-emerald-400 font-mono text-xs font-bold">64 x 64 PX</span>
-            </div>
-
-            {/* History Buffer */}
-            {history.length > 0 && (
-              <div className="pt-6 border-t border-neutral-900 mt-2">
-                 <div className="flex items-center justify-between mb-4">
-                   <div className="flex items-center gap-2">
-                     <span className="text-[10px] font-mono font-black text-neutral-600 uppercase tracking-[0.3em]">Temporal_Buffer</span>
-                     <div className="px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 text-[8px] font-bold">{history.length}/6</div>
-                   </div>
-                   <div className="flex items-center gap-3">
-                     <button
-                       onClick={handleUndo}
-                       disabled={!canUndo}
-                       className="text-[9px] text-neutral-500 disabled:opacity-25 hover:text-sky-500 transition-colors uppercase font-black tracking-widest"
-                     >
-                       Undo
-                     </button>
-                     <button
-                       onClick={handleRedo}
-                       disabled={!canRedo}
-                       className="text-[9px] text-neutral-500 disabled:opacity-25 hover:text-emerald-500 transition-colors uppercase font-black tracking-widest"
-                     >
-                       Redo
-                     </button>
-                     <button 
-                       onClick={() => {
-                          setHistory([]);
-                          setHistoryIndex(-1);
-                          toast.info("Buffer Purged", { description: "Memory sectors cleared successfully." });
-                       }} 
-                       className="text-[9px] text-neutral-700 hover:text-red-500 transition-colors uppercase font-black tracking-widest flex items-center gap-1 group ml-2"
-                     >
-                       <Trash2 className="w-3 h-3 group-hover:scale-110 transition-transform" />
-                       Clear
-                     </button>
-                   </div>
-                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  {history.map((item, idx) => {
-                    const isCurrent = currentSkinUrl === item.url;
-                    return (
-                      <div key={idx} className="relative group/hist">
-                        <button 
-                          onClick={() => handleUseAsBase(item)}
-                          className={cn(
-                            "w-full aspect-square rounded-xl border bg-neutral-950 p-2 transition-all hover:scale-105 active:scale-95 overflow-hidden",
-                            isCurrent ? "border-emerald-500/50 bg-emerald-500/5 ring-1 ring-emerald-500/20" : "border-neutral-800 hover:border-neutral-700"
-                          )}
-                        >
-                          <img src={item.url} className="w-full h-full object-contain [image-rendering:pixelated] drop-shadow-lg" alt={`History ${idx}`} />
-                          {isCurrent && (
-                            <div className="absolute top-1 right-1">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-emerald-500/10 opacity-0 group-hover/hist:opacity-100 transition-opacity" />
-                        </button>
-                        
-                        {/* Action Overlay */}
-                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 flex items-center gap-1 opacity-0 group-hover/hist:opacity-100 transition-all translate-y-2 group-hover/hist:translate-y-0 z-20">
-                           <button 
-                             onClick={(e) => { e.stopPropagation(); handleRegenerate(item); }}
-                             className="p-1 px-1.5 bg-sky-500 hover:bg-sky-400 text-white rounded shadow-lg transition-colors flex items-center gap-1"
-                             title="Regenerate with same settings"
-                           >
-                             <RotateCcw className="w-2.5 h-2.5" />
-                             <span className="text-[7px] font-bold uppercase">Regen</span>
-                           </button>
-                           <button 
-                             onClick={(e) => { e.stopPropagation(); handleUseAsBase(item); }}
-                             className="p-1 px-1.5 bg-emerald-500 hover:bg-emerald-400 text-white rounded shadow-lg transition-colors flex items-center gap-1"
-                             title="Load as base for editing"
-                           >
-                             <PlusCircle className="w-2.5 h-2.5" />
-                             <span className="text-[7px] font-bold uppercase">Base</span>
-                           </button>
-                           <button 
-                             onClick={(e) => { e.stopPropagation(); handleDeleteHistory(idx); }}
-                             className="p-1 bg-red-500 hover:bg-red-400 text-white rounded shadow-lg transition-colors"
-                             title="Delete"
-                           >
-                             <Trash2 className="w-2.5 h-2.5" />
-                           </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+      <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto">
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setActiveTab("viewport")}
+            className={cn(
+              "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all",
+              activeTab === "viewport" ? "bg-m3-primary text-m3-on-primary shadow-m3-1" : "bg-m3-surface-container text-m3-on-surface-variant hover:bg-m3-surface-variant"
             )}
-          </div>
+          >
+            Viewport 3D
+          </button>
+          <button 
+            onClick={() => setActiveTab("history")}
+            className={cn(
+              "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-2",
+              activeTab === "history" ? "bg-m3-primary text-m3-on-primary shadow-m3-1" : "bg-m3-surface-container text-m3-on-surface-variant hover:bg-m3-surface-variant"
+            )}
+          >
+            <History className="w-3 h-3" /> Histórico ({history.length})
+          </button>
         </div>
+
+        {activeTab === "history" ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-4">
+             {history.map((item) => (
+                <div 
+                  key={item.id} 
+                  className="bg-m3-surface-container p-4 rounded-3xl border border-m3-outline-variant hover:border-m3-primary/50 transition-all cursor-pointer group relative"
+                  onClick={() => {
+                    setCurrentSkinUrl(item.result);
+                    if (item.parameters) {
+                      const params = item.parameters as any;
+                      setModelType(params.modelType);
+                      setDetailLevel(params.detailLevel);
+                      setUseCape(params.useCape);
+                      setPalette(params.palette);
+                    }
+                    window.dispatchEvent(new CustomEvent('set-builder-prompt', { detail: item.prompt }));
+                    setActiveTab("viewport");
+                  }}
+                >
+                  <div className="aspect-square bg-m3-surface-container-highest rounded-2xl mb-4 overflow-hidden flex items-center justify-center">
+                    <img src={item.result} alt="History Skin" className="pixelated w-32 h-32" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-m3-on-surface font-bold truncate">"{item.prompt}"</p>
+                    <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-m3-on-surface-variant/40">
+                      <span>{(item.parameters as any)?.modelType}</span>
+                      <span>{new Date(item.timestamp).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); removeHistory(item.id); }}
+                    className="absolute top-2 right-2 p-2 text-m3-error opacity-0 group-hover:opacity-100 transition-all hover:bg-m3-error-container rounded-full"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+             ))}
+             {history.length === 0 && (
+               <div className="col-span-full py-20 text-center opacity-30 uppercase font-black tracking-widest text-xs">Vazio. Gere algo novo para indexar.</div>
+             )}
+          </div>
+        ) : (
+          <div className={cn(
+            "flex flex-col lg:flex-row gap-12 items-center justify-center p-8 w-full h-full transition-all duration-500",
+            isGenerating ? "opacity-50 grayscale" : "opacity-100"
+          )}>
+            {/* 3D Interactive Viewer */}
+            <div className="flex-1 flex flex-col items-center justify-center gap-6 w-full lg:w-1/2">
+               <div className="flex items-center gap-3 bg-m3-surface-container-high px-4 py-2 rounded-full border border-m3-outline-variant text-m3-primary font-bold text-[10px] tracking-[0.2em] uppercase shadow-m3-1">
+                  <User className="w-4 h-4" /> Modelo: <span className="text-m3-on-surface">{modelType.toUpperCase()}</span>
+               </div>
+               
+               <div className="relative group w-full aspect-[4/5] max-w-[400px]">
+                 {isGenerating && (
+                   <div className="absolute inset-0 z-20 flex items-center justify-center bg-m3-surface/60 backdrop-blur-md rounded-2xl border border-m3-primary/20">
+                     <div className="flex flex-col items-center gap-4">
+                        <div className="relative">
+                          <Loader2 className="w-12 h-12 animate-spin text-m3-primary" />
+                          <div className="absolute inset-0 blur-lg bg-m3-primary/20 animate-pulse" />
+                        </div>
+                        <span className="text-xs font-bold text-m3-primary animate-pulse uppercase tracking-[0.4em]">Gerando Pixels...</span>
+                     </div>
+                   </div>
+                 )}
+                 <div className="absolute -inset-8 bg-m3-primary/5 blur-[100px] rounded-full opacity-0 group-hover:opacity-60 transition-opacity duration-1000" />
+                 <SkinViewer3D 
+                   skinUrl={skinToDisplay} 
+                   modelType={modelType} 
+                   autoRotate={autoRotate} 
+                   capeUrl={(externalCapeUrl && !capeInputError) ? externalCapeUrl : (useCape ? "https://textures.minecraft.net/texture/235338386f91ad18485293297a7a13d705c56c2fbd401a88b5ba805b5f25a3d" : undefined)} 
+                 />
+                 
+                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-m3-surface-container-highest/60 backdrop-blur-sm px-4 py-2 rounded-full border border-m3-outline-variant text-[9px] text-m3-on-surface-variant font-bold uppercase tracking-widest pointer-events-none">
+                    Arraste para Girar • Scroll para Zoom
+                 </div>
+               </div>
+
+               {telemetryLogs.length > 0 && (
+                 <div className="w-full max-w-[400px] bg-m3-surface-container-low border border-m3-outline-variant rounded-2xl p-4 font-mono text-[10px] space-y-2 overflow-hidden animate-in fade-in slide-in-from-bottom-2 shadow-inner">
+                   <div className="flex items-center justify-between mb-2 text-m3-on-surface-variant border-b border-m3-outline-variant pb-2">
+                     <span className="font-black uppercase tracking-widest text-[9px]">Audit_Telemetria</span>
+                     <span className="text-[8px] opacity-60">Status: ATIVO</span>
+                   </div>
+                   {telemetryLogs.map((log) => (
+                     <div key={log.id} className="flex gap-2 animate-in slide-in-from-left-2">
+                       <span className="text-m3-on-surface-variant/40">[{new Date().toTimeString().split(' ')[0]}]</span>
+                       <span className={cn(
+                         "font-bold uppercase tracking-tight",
+                         log.type === 'info' ? 'text-m3-secondary' : log.type === 'success' ? 'text-m3-primary' : 'text-m3-error'
+                       )}>
+                         {log.type === 'info' ? '>>' : log.type === 'success' ? 'OK' : '!!'} {log.msg}
+                       </span>
+                     </div>
+                   ))}
+                 </div>
+               )}
+
+               <div className="flex flex-col gap-3 w-full max-w-[400px]">
+                 <button
+                   onClick={() => handleDownload(skinToDisplay)}
+                   disabled={isExporting}
+                   className={cn(
+                     "flex w-full justify-center items-center gap-4 h-14 bg-m3-primary hover:bg-m3-primary/90 active:scale-95 transition-all rounded-full text-m3-on-primary font-bold text-sm uppercase tracking-[0.15em] shadow-m3-2 group relative overflow-hidden",
+                     isExporting && "opacity-50 cursor-not-allowed shadow-none"
+                   )}
+                 >
+                   {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <DownloadIcon className="w-5 h-5 relative z-10 group-hover:translate-y-0.5 transition-transform" />}
+                   <span className="relative z-10">{isExporting ? "Exportando..." : "Baixar Binário Skin"}</span>
+                 </button>
+
+                 <button
+                   onClick={handleSaveCloud}
+                   disabled={isSavingCloud}
+                   data-action="save"
+                   className={cn(
+                     "flex w-full justify-center items-center gap-4 h-12 bg-m3-surface-container-high hover:bg-m3-surface-variant active:scale-95 transition-all rounded-full text-m3-on-surface font-bold text-xs uppercase tracking-[0.1em] border border-m3-outline-variant group relative",
+                     isSavingCloud && "opacity-50 cursor-not-allowed"
+                   )}
+                 >
+                   {isSavingCloud ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4 relative z-10 group-hover:-translate-y-1 transition-transform" />}
+                   <span className="relative z-10">{isSavingCloud ? "Salvando..." : "Salvar no Cloud Vault"}</span>
+                 </button>
+               </div>
+            </div>
+
+            {/* Flat Texture & Exporter */}
+            <div className="flex-1 flex flex-col items-center justify-center gap-8 w-full lg:w-1/2 border-t lg:border-t-0 lg:border-l border-m3-outline-variant pt-8 lg:pt-0 lg:pl-12">
+              <div className="space-y-2 text-center">
+                <h3 className="text-m3-on-surface-variant font-black text-[11px] tracking-widest uppercase opacity-70">Projeto_UV_Map</h3>
+                <p className="text-[10px] text-m3-on-surface-variant/40 italic">"Estrutura fundamental da malha"</p>
+              </div>
+              <div className="relative p-6 bg-m3-surface-container rounded-3xl shadow-m3-3 border border-m3-outline-variant group/texture transition-all hover:shadow-m3-4">
+                <img 
+                  src={skinToDisplay} 
+                  alt="Flat Texture" 
+                  className="pixelated w-48 h-48 sm:w-64 sm:h-64 rounded-xl border border-m3-outline-variant shadow-inner transition-transform group-hover/texture:scale-[1.02]" 
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }, [currentSkinUrl, modelType, autoRotate, useCape, history, externalSkinUrl, externalCapeUrl]);

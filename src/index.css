@@ -1,5 +1,85 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Inter", "Roboto Flex", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Material Design 3 Color Tokens */
+  --color-m3-primary: var(--primary);
+  --color-m3-on-primary: var(--on-primary);
+  --color-m3-primary-container: var(--primary-container);
+  --color-m3-on-primary-container: var(--on-primary-container);
+  --color-m3-secondary: var(--secondary);
+  --color-m3-on-secondary: var(--on-secondary);
+  --color-m3-secondary-container: var(--secondary-container);
+  --color-m3-on-secondary-container: var(--on-secondary-container);
+  --color-m3-surface: var(--surface);
+  --color-m3-on-surface: var(--on-surface);
+  --color-m3-surface-variant: var(--surface-variant);
+  --color-m3-on-surface-variant: var(--on-surface-variant);
+  --color-m3-background: var(--background);
+  --color-m3-on-background: var(--on-background);
+  --color-m3-outline: var(--outline);
+  --color-m3-outline-variant: var(--outline-variant);
+
+  /* Elevation Shadows */
+  --shadow-m3-1: 0px 1px 2px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --shadow-m3-2: 0px 1px 2px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --shadow-m3-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+@layer base {
+  :root {
+    --primary: #6750A4;
+    --on-primary: #FFFFFF;
+    --primary-container: #EADDFF;
+    --on-primary-container: #21005D;
+    
+    --secondary: #625B71;
+    --on-secondary: #FFFFFF;
+    --secondary-container: #E8DEF8;
+    --on-secondary-container: #1D192B;
+    
+    --surface: #FEF7FF;
+    --on-surface: #1D1B20;
+    --surface-variant: #E7E0EB;
+    --on-surface-variant: #49454F;
+    
+    --background: #FEF7FF;
+    --on-background: #1D1B20;
+    
+    --outline: #79747E;
+    --outline-variant: #CAC4D0;
+  }
+
+  .dark {
+    --primary: #D0BCFF;
+    --on-primary: #381E72;
+    --primary-container: #4F378B;
+    --on-primary-container: #EADDFF;
+    
+    --secondary: #CCC2DC;
+    --on-secondary: #332D41;
+    --secondary-container: #4A4458;
+    --on-secondary-container: #E8DEF8;
+    
+    --surface: #141218;
+    --on-surface: #E6E1E5;
+    --surface-variant: #49454F;
+    --on-surface-variant: #CAC4D0;
+    
+    --background: #141218;
+    --on-background: #E6E1E5;
+    
+    --outline: #938F99;
+    --outline-variant: #49454F;
+  }
+
+  body {
+    @apply bg-m3-background text-m3-on-background font-sans transition-colors duration-300;
+  }
+}
+
 @layer utilities {
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;

@@ -4,13 +4,15 @@ import Prism from "prismjs";
 import "prismjs/themes/prism-tomorrow.css";
 import "prismjs/components/prism-java";
 import "prismjs/components/prism-javascript";
-import { Loader2, Box, Layers, Sparkles, BookOpen, Download, RotateCcw, RotateCw, Copy, Cloud } from "lucide-react";
+import { Loader2, Box, Layers, Sparkles, BookOpen, Download, RotateCcw, RotateCw, Copy, Cloud, Trash2 } from "lucide-react";
 import { saveArtifact } from "../lib/db";
 import { FrontLogger } from "../lib/logger";
 import { cn, sleep, withExponentialBackoff } from "../lib/utils";
 import { saveAs } from "file-saver";
 import { toast } from "sonner";
 import JSZip from "jszip";
+
+import { usePersistentHistory } from "../hooks/usePersistentHistory";
 
 const FRAMEWORKS = [
   { id: "spigot", label: "Spigot Plugin", icon: "⚙️" },
@@ -90,58 +92,28 @@ const API_DOCS: Record<string, {
 };
 
 export default function ModGenerator() {
+  const { history, addHistory, removeHistory } = usePersistentHistory('mod', 15);
   const [framework, setFramework] = useState("spigot");
   const [version, setVersion] = useState("1.21");
   const [complexity, setComplexity] = useState("Standard");
+  const [boilerplateOnly, setBoilerplateOnly] = useState(false);
+  const [activeTab, setActiveTab] = useState<"code" | "history">("code");
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [telemetryLogs, setTelemetryLogs] = useState<{id: string, msg: string, type: 'info' | 'warn' | 'success'}[]>([]);
+
+  const addLog = useCallback((msg: string, type: 'info' | 'warn' | 'success' = 'info') => {
+    setTelemetryLogs(prev => [{ id: Math.random().toString(36), msg, type }, ...prev].slice(0, 10));
+  }, []);
 
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const [currentCode, setCurrentCode] = useState("");
 
   const onGenerateComplete = useCallback((result: string) => {
-    if (currentCode) {
-      setUndoStack(prev => [currentCode, ...prev].slice(0, 20));
+    if (result) {
+      // Logic for currentCode update is handled in generateMod return
     }
-    setRedoStack([]);
-    setCurrentCode(result);
-  }, [currentCode]);
-
-  const undo = useCallback(() => {
-    if (undoStack.length === 0) return;
-    const prev = undoStack[0];
-    setRedoStack(r => [currentCode, ...r]);
-    setCurrentCode(prev);
-    setUndoStack(u => u.slice(1));
-  }, [currentCode, undoStack]);
-
-  const redo = useCallback(() => {
-    if (redoStack.length === 0) return;
-    const next = redoStack[0];
-    setUndoStack(u => [currentCode, ...u]);
-    setCurrentCode(next);
-    setRedoStack(r => r.slice(1));
-  }, [currentCode, redoStack]);
-
-  const addLog = useCallback((msg: string, type: 'info' | 'warn' | 'success' = 'info') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setTelemetryLogs(prev => [{id, msg, type}, ...prev].slice(0, 7));
   }, []);
-
-  useEffect(() => {
-    let active = true;
-    const fetchDocs = async () => {
-      setLoadingDocs(true);
-      try {
-        await sleep(400); // UI Minimum display time to avoid flicker
-      } finally {
-        if (active) setLoadingDocs(false);
-      }
-    };
-    fetchDocs();
-    return () => { active = false; };
-  }, [framework, version]);
 
   const generateMod = useCallback(async (prompt: string, existingData?: string, targetLanguage?: string) => {
     addLog(`Iniciando pipeline de ${existingData ? 'otimização' : 'geração'}...`, "info");
@@ -150,7 +122,7 @@ export default function ModGenerator() {
       const endpoint = isEditMode ? "/api/edit-mod" : "/api/generate-mod";
       
       // Prompt Optimization
-      const systemContext = `
+      let systemContext = `
 # ROLE: Senior Minecraft Systems Engineer
 # CONTEXT: ${framework.toUpperCase()} | Version: ${version}
 # QUALITY: ${complexity}
@@ -161,6 +133,10 @@ export default function ModGenerator() {
 - If Java, ensure the class is public and follows naming conventions.
 - If version is 1.21+, use Data Components instead of NBT if applicable for ${framework}.
 `;
+
+      if (boilerplateOnly) {
+        systemContext += `\n# BOILERPLATE MODE: Do not implement business logic. Create the main class structure, imports, and necessary lifecycle methods (onEnable/onDisable/init) with TODO comments for logic. Focus on API connectivity.`;
+      }
 
       const finalPrompt = isEditMode 
         ? `${systemContext}\n# TASK: Refactor/Update/Translate\n${prompt}` 
@@ -192,39 +168,38 @@ export default function ModGenerator() {
         FrontLogger.error("API Request Failure", { endpoint, error: fetchErr.message });
         addLog(`Erro de conexão: ${fetchErr.message}. Ativando Offline Engine.`, "warn");
         
-        // Import OfflineEngine if needed, but it should be available. Wait, is it imported at top?
-        // It's not currently imported in ModGenerator... wait, I need to check.
-        // Actually, just to be safe, I'll fallback.
-        try {
-          const { OfflineEngine } = await import("../services/OfflineEngine");
-          const fallbackCode = OfflineEngine.generateMod(prompt, framework as any);
-          addLog("Gerado via Procedural Fallback.", "success");
-          return fallbackCode;
-        } catch (offlineErr) {
-          throw fetchErr;
-        }
+        const { OfflineEngine } = await import("../services/OfflineEngine");
+        const fallbackCode = OfflineEngine.generateMod(prompt, framework as any);
+        addLog("Gerado via Procedural Fallback.", "success");
+        
+        addHistory(prompt, fallbackCode, { framework, version, complexity });
+        setCurrentCode(fallbackCode);
+        return fallbackCode;
       }
 
       addLog("Resposta recebida e validada.", "success");
 
       // Clean up markdown ticks if Gemini provides them
       let code = data.result || "";
-    if (code.startsWith("\`\`\`java")) {
-      code = code.replace(/^\`\`\`java\n/, "");
-    } else if (code.startsWith("\`\`\`javascript")) {
-      code = code.replace(/^\`\`\`javascript\n/, "");
-    }
-    if (code.endsWith("```")) {
-      code = code.slice(0, -3);
-    }
-    return code;
+      if (code.startsWith("\`\`\`java")) {
+        code = code.replace(/^\`\`\`java\n/, "");
+      } else if (code.startsWith("\`\`\`javascript")) {
+        code = code.replace(/^\`\`\`javascript\n/, "");
+      }
+      if (code.endsWith("```")) {
+        code = code.slice(0, -3);
+      }
+      
+      addHistory(prompt, code, { framework, version, complexity });
+      setCurrentCode(code);
+      return code;
     } catch (error: any) {
       FrontLogger.error("Mod Generation Failure", { error: error.message });
       addLog(`Falha técnica: ${error.message}`, "warn");
       toast.error("Erro no Processamento", { description: error?.message || "Ocorreu uma falha na IA." });
       throw error;
     }
-  }, [framework, version, complexity]);
+  }, [framework, version, complexity, boilerplateOnly, addHistory]);
 
   const handleDownloadJar = useCallback(async (code: string) => {
     const zip = new JSZip();
@@ -391,7 +366,7 @@ export default function ModGenerator() {
           </select>
         </div>
 
-        {/* Complexity Selection */}
+        {/* Quality Selection */}
         <div className="flex items-center gap-3 bg-neutral-900/50 p-1.5 rounded-lg border border-neutral-800">
           <div className="flex items-center gap-2 pl-2 pr-1">
             <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
@@ -415,23 +390,19 @@ export default function ModGenerator() {
           </div>
         </div>
 
+        {/* Boilerplate Toggle */}
+        <button 
+          onClick={() => setBoilerplateOnly(!boilerplateOnly)}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 border rounded-full text-[10px] font-black uppercase tracking-widest transition-all shadow-m3-1",
+            boilerplateOnly ? "bg-amber-500/20 text-amber-400 border-amber-500/50" : "bg-neutral-900 border-neutral-800 text-neutral-500 hover:bg-neutral-800"
+          )}
+        >
+          {boilerplateOnly ? "Boilerplate Ativo" : "Implementação Completa"}
+        </button>
+
         {currentCode && (
            <div className="ml-auto flex items-center gap-2 bg-neutral-900 px-2 py-1.5 rounded-lg border border-neutral-800">
-              <button 
-                onClick={undo} disabled={undoStack.length === 0} 
-                className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors"
-                title="Undo Generation"
-              >
-                <RotateCcw className="w-3 h-3" />
-              </button>
-              <button 
-                onClick={redo} disabled={redoStack.length === 0} 
-                className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors"
-                title="Redo Generation"
-              >
-                <RotateCw className="w-3 h-3" />
-              </button>
-              <div className="w-px h-3 bg-neutral-800 mx-1" />
               <button 
                 onClick={() => {
                   navigator.clipboard.writeText(currentCode);
@@ -440,7 +411,7 @@ export default function ModGenerator() {
                 className="p-1 text-sky-400 hover:text-sky-300 transition-colors"
                 title="Copy Source"
               >
-                <Copy className="w-3 h-3" />
+                <Copy className="w-3.5 h-3.5" />
               </button>
            </div>
          )}
@@ -528,7 +499,6 @@ export default function ModGenerator() {
       ]}
       endpointType="generate-mod"
       onGenerate={generateMod}
-      onGenerateComplete={onGenerateComplete}
       onSaveCloud={handleSaveCloud}
       supportsEditing={true}
       extraControls={controls}
@@ -537,34 +507,94 @@ export default function ModGenerator() {
         const finalResult = isGenerating ? result : currentCode || result;
         return (
           <div className="space-y-6">
-            {/* Telemetry Logs Display */}
-            {telemetryLogs.length > 0 && (
-              <div className="bg-neutral-900/40 border border-neutral-800 rounded-xl p-3 font-mono text-[9px] space-y-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center justify-between mb-2 text-neutral-600 border-b border-neutral-800 pb-1">
-                  <span className="font-black uppercase tracking-widest">SRE_Telemetry</span>
-                  <span className="text-[7px]">Orchestrator v1.4</span>
-                </div>
-                {telemetryLogs.map((log) => (
-                  <div key={log.id} className="flex gap-2">
-                    <span className="text-neutral-700">[{new Date().toLocaleTimeString()}]</span>
-                    <span className={cn(
-                      "font-bold uppercase tracking-tight",
-                      log.type === 'info' ? 'text-sky-500' : log.type === 'success' ? 'text-emerald-500' : 'text-amber-500'
-                    )}>
-                      {log.type === 'info' ? '>>' : log.type === 'success' ? 'OK' : '!!'} {log.msg}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="flex gap-2 mb-4">
+              <button 
+                onClick={() => setActiveTab("code")}
+                className={cn(
+                  "px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all",
+                  activeTab === "code" ? "bg-sky-500 text-white" : "bg-neutral-900 text-neutral-500 hover:bg-neutral-800"
+                )}
+              >
+                Output Código
+              </button>
+              <button 
+                onClick={() => setActiveTab("history")}
+                className={cn(
+                  "px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all",
+                  activeTab === "history" ? "bg-sky-500 text-white" : "bg-neutral-900 text-neutral-500 hover:bg-neutral-800"
+                )}
+              >
+                Histórico ({history.length})
+              </button>
+            </div>
 
-            {isGenerating && !finalResult ? (
-              <div className="py-20 text-center">
-                <Loader2 className="w-8 h-8 animate-spin text-sky-500 mx-auto mb-4" />
-                <p className="text-[10px] font-mono text-sky-500 uppercase tracking-[0.3em] animate-pulse">Compiling Logic...</p>
+            {activeTab === "history" ? (
+              <div className="grid gap-3 animate-in fade-in slide-in-from-top-4">
+                 {history.map((item) => (
+                   <div 
+                    key={item.id} 
+                    className="flex items-center justify-between p-4 bg-neutral-900/60 border border-neutral-800 rounded-2xl hover:border-sky-500/30 transition-all cursor-pointer group"
+                    onClick={() => {
+                      setCurrentCode(item.result);
+                      if (item.parameters) {
+                        const params = item.parameters as any;
+                        setFramework(params.framework);
+                        setVersion(params.version);
+                        setComplexity(params.complexity);
+                      }
+                      window.dispatchEvent(new CustomEvent('set-builder-prompt', { detail: item.prompt }));
+                      setActiveTab("code");
+                    }}
+                   >
+                     <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-black uppercase text-sky-400 tracking-widest">{(item.parameters as any)?.framework} {(item.parameters as any)?.version}</span>
+                        <p className="text-xs text-white truncate max-w-md font-mono">"{item.prompt}"</p>
+                        <span className="text-[8px] text-neutral-600 font-mono italic">{new Date(item.timestamp).toLocaleString()}</span>
+                     </div>
+                     <button 
+                        onClick={(e) => { e.stopPropagation(); removeHistory(item.id); }}
+                        className="p-2 text-neutral-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                     >
+                        <Trash2 className="w-4 h-4" />
+                     </button>
+                   </div>
+                 ))}
+                 {history.length === 0 && (
+                   <div className="py-20 text-center opacity-30 uppercase font-black tracking-widest text-xs">Arquivo de logs vazio.</div>
+                 )}
               </div>
             ) : (
-              <OutputWrapper result={finalResult} onDownload={() => handleDownloadJar(finalResult)} />
+              <div className="space-y-6">
+                {/* Telemetry Logs Display */}
+                {telemetryLogs.length > 0 && (
+                  <div className="bg-neutral-900/40 border border-neutral-800 rounded-xl p-3 font-mono text-[9px] space-y-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center justify-between mb-2 text-neutral-600 border-b border-neutral-800 pb-1">
+                      <span className="font-black uppercase tracking-widest">SRE_Telemetry</span>
+                      <span className="text-[7px]">Orchestrator v1.4</span>
+                    </div>
+                    {telemetryLogs.map((log) => (
+                      <div key={log.id} className="flex gap-2">
+                        <span className="text-neutral-700">[{new Date().toLocaleTimeString()}]</span>
+                        <span className={cn(
+                          "font-bold uppercase tracking-tight",
+                          log.type === 'info' ? 'text-sky-500' : log.type === 'success' ? 'text-emerald-500' : 'text-amber-500'
+                        )}>
+                          {log.type === 'info' ? '>>' : log.type === 'success' ? 'OK' : '!!'} {log.msg}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {isGenerating && !finalResult ? (
+                  <div className="py-20 text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-sky-500 mx-auto mb-4" />
+                    <p className="text-[10px] font-mono text-sky-500 uppercase tracking-[0.3em] animate-pulse">Compiling Logic...</p>
+                  </div>
+                ) : (
+                  <OutputWrapper result={finalResult} onDownload={() => handleDownloadJar(finalResult)} />
+                )}
+              </div>
             )}
           </div>
         );

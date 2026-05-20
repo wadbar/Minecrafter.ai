@@ -14,7 +14,9 @@ import CommandPalette from "./components/CommandPalette";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SystemStatus from "./components/SystemStatus";
 import { AuthProvider } from "./lib/firebase";
+import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import { cn } from "./lib/utils";
+import { Moon, Sun } from "lucide-react";
 
 // Lazy loading heavy generator components for performance optimization
 const MapGenerator = lazy(() => import("./components/MapGenerator"));
@@ -30,11 +32,12 @@ const VoxelLab = lazy(() => import("./components/VoxelLab"));
 
 export type ViewState = "dashboard" | "map" | "mod" | "texture" | "skin" | "storyteller" | "scripthub" | "integrations" | "vault" | "settings" | "voxellab";
 
-export default function App() {
+function AppContent() {
   const [currentView, setCurrentView] = useState<ViewState>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [telemetry, setTelemetry] = useState({ cpu: 42, load: 22 });
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     // Initial state based on screen size
@@ -121,110 +124,115 @@ export default function App() {
 
   // Lazy loading fallback skeleton
   const LoadingFallback = () => (
-    <div className="flex h-full w-full items-center justify-center text-neutral-500 font-mono text-sm animate-pulse">
+    <div className="flex h-full w-full items-center justify-center text-m3-on-surface-variant font-mono text-sm animate-pulse">
       [ CARREGANDO MÓDULO DE EXECUÇÃO... ]
     </div>
   );
 
   return (
-    <AuthProvider>
-      <div className="flex flex-col h-screen bg-neutral-950 overflow-hidden font-sans selection:bg-emerald-500/30 industrial-bg">
-        <CommandPalette 
-          isOpen={commandPaletteOpen} 
-          onClose={() => setCommandPaletteOpen(false)} 
-          onNavigate={setCurrentView} 
-        />
-        {/* Desktop Title Bar (Chromium Shell Simulation) */}
-        <div className="h-8 bg-black border-b border-white/5 flex items-center justify-between px-4 z-50 shrink-0 select-none">
-          <div className="flex items-center gap-4">
-            <div className="flex gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/40 hover:bg-red-500 transition-colors" />
-              <div className="w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500 transition-colors" />
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 hover:bg-emerald-500 transition-colors" />
-            </div>
-            <div className="h-3 w-px bg-neutral-800" />
-            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-600">Industrial Solutions Builder Core</span>
+    <div className="flex flex-col h-screen bg-m3-background text-m3-on-background overflow-hidden font-sans selection:bg-m3-primary/30">
+      <CommandPalette 
+        isOpen={commandPaletteOpen} 
+        onClose={() => setCommandPaletteOpen(false)} 
+        onNavigate={setCurrentView} 
+      />
+      
+      {/* M3 Header / Title Bar */}
+      <div className="h-10 bg-m3-surface text-m3-on-surface border-b border-m3-outline-variant flex items-center justify-between px-4 z-50 shrink-0 select-none">
+        <div className="flex items-center gap-4">
+          <div className="flex gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500/40" />
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-500/40" />
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/40" />
           </div>
-          <div className="flex items-center gap-5 text-[9px] font-bold text-neutral-600 uppercase tracking-[0.2em]">
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-neutral-900 rounded border border-neutral-800">
-               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_rgba(16,185,129,1)]" />
-               <span className="text-emerald-500/80">SANDBOX_VM_ACTIVE</span>
-            </div>
-            <span className="hover:text-emerald-500 transition-colors cursor-default">File</span>
-            <span className="hover:text-emerald-500 transition-colors cursor-default">Processor</span>
-            <span className="hover:text-emerald-500 transition-colors cursor-default underline decoration-emerald-500/30 underline-offset-4">Sys_Dev</span>
+          <div className="h-4 w-px bg-m3-outline-variant" />
+          <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">Industrial Solutions Builder</span>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={toggleTheme}
+            className="p-1.5 rounded-full hover:bg-m3-surface-variant text-m3-on-surface-variant transition-colors"
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+          <div className="flex items-center gap-2 px-2 py-0.5 bg-m3-secondary-container text-m3-on-secondary-container rounded-full text-[9px] font-bold uppercase tracking-tight">
+             <div className="w-1.5 h-1.5 rounded-full bg-m3-primary animate-pulse" />
+             <span>Core v2.4.0</span>
           </div>
         </div>
+      </div>
 
-        <div className="flex flex-1 overflow-hidden relative">
-          <Toaster theme="dark" position="bottom-right" />
-          <Sidebar
-            isOpen={sidebarOpen}
-            setIsOpen={setSidebarOpen}
-            currentView={currentView}
-            setCurrentView={setCurrentView}
-          />
-        <main className="flex-1 overflow-y-auto relative">
-        <header className="sticky top-0 z-40 flex h-20 items-center px-4 md:px-8 bg-neutral-950/50 backdrop-blur-xl border-b border-neutral-900/50 justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className={cn(
-                "p-2.5 rounded-xl transition-all active:scale-90 group relative overflow-hidden",
-                sidebarOpen ? "bg-emerald-500/10 text-emerald-500" : "bg-neutral-900 text-neutral-400 hover:text-white"
-              )}
-              aria-label="Toggle Menu"
-            >
-              <Menu className={cn("w-6 h-6 transition-transform duration-500", sidebarOpen && "rotate-180")} />
-              {/* Pulse effect when closed on mobile */}
-              {!sidebarOpen && (
-                <div className="absolute inset-0 border border-emerald-500/20 rounded-xl animate-pulse md:hidden" />
-              )}
-            </button>
-            <div className="flex flex-col">
-              <div className="font-mono text-[9px] font-black tracking-[0.4em] uppercase text-neutral-700 mb-0.5 leading-none">Solutions_Builder</div>
-              <div className="font-mono text-sm font-black text-emerald-500 uppercase tracking-widest drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]">
-                {currentView}
+      <div className="flex flex-1 overflow-hidden relative">
+        <Toaster theme={theme as any} position="bottom-right" closeButton richColors />
+        <Sidebar
+          isOpen={sidebarOpen}
+          setIsOpen={setSidebarOpen}
+          currentView={currentView}
+          setCurrentView={setCurrentView}
+        />
+        <main className="flex-1 overflow-y-auto relative bg-m3-surface">
+          <header className="sticky top-0 z-40 flex h-16 items-center px-4 md:px-6 bg-m3-surface/80 backdrop-blur-md border-b border-m3-outline-variant justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className={cn(
+                  "p-2 rounded-full transition-transform active:scale-90",
+                  sidebarOpen ? "text-m3-primary" : "text-m3-on-surface-variant hover:bg-m3-surface-variant"
+                )}
+                aria-label="Toggle Menu"
+              >
+                <Menu className={cn("w-6 h-6 transition-transform duration-300", sidebarOpen && "rotate-90")} />
+              </button>
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-m3-on-surface capitalize tracking-wide">
+                  {currentView}
+                </span>
               </div>
             </div>
-          </div>
 
-          <div className="hidden md:flex items-center gap-8 font-mono text-[9px] font-bold text-neutral-600 uppercase tracking-widest">
-             <div className="flex flex-col items-end">
-                <span className="text-neutral-700">CPU_Core_Temp</span>
-                <span className="text-emerald-500">{telemetry.cpu}°C [STABLE]</span>
-             </div>
-             <div className="flex flex-col items-end">
-                <span className="text-neutral-700">Process_Load</span>
-                <span className="text-sky-500">{telemetry.load}% [NOMINAL]</span>
-             </div>
-             <div className="flex flex-col items-end">
-                <span className="text-neutral-700">Uptime_Link</span>
-                <span className="text-amber-500">99.99%</span>
-             </div>
+            <div className="hidden md:flex items-center gap-6 text-[10px] font-medium text-m3-on-surface-variant uppercase tracking-wider">
+               <div className="flex flex-col items-end">
+                  <span className="opacity-60">Engine_CPU</span>
+                  <span className="text-m3-primary font-bold">{telemetry.cpu}°C</span>
+               </div>
+               <div className="flex flex-col items-end">
+                  <span className="opacity-60">Runtime_Load</span>
+                  <span className="text-m3-on-surface font-bold">{telemetry.load}%</span>
+               </div>
+            </div>
+          </header>
+          
+          <div className="p-4 md:p-8 max-w-7xl mx-auto min-h-full">
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingFallback />}>
+                {currentView === "dashboard" && <Dashboard setCurrentView={setCurrentView} />}
+                {currentView === "map" && <MapGenerator />}
+                {currentView === "mod" && <ModGenerator />}
+                {currentView === "texture" && <TextureGenerator />}
+                {currentView === "skin" && <SkinGenerator />}
+                {currentView === "storyteller" && <StorytellerGenerator />}
+                {currentView === "voxellab" && <VoxelLab />}
+                {currentView === "scripthub" && <ScriptHub />}
+                {currentView === "integrations" && <Integrations />}
+                {currentView === "vault" && <CloudVault />}
+                {currentView === "settings" && <SystemSettings />}
+              </Suspense>
+            </ErrorBoundary>
           </div>
-        </header>
-        <div className="p-6 md:p-10 max-w-7xl mx-auto h-full">
-          <ErrorBoundary>
-            <Suspense fallback={<LoadingFallback />}>
-              {currentView === "dashboard" && <Dashboard setCurrentView={setCurrentView} />}
-              {currentView === "map" && <MapGenerator />}
-              {currentView === "mod" && <ModGenerator />}
-              {currentView === "texture" && <TextureGenerator />}
-              {currentView === "skin" && <SkinGenerator />}
-              {currentView === "storyteller" && <StorytellerGenerator />}
-              {currentView === "voxellab" && <VoxelLab />}
-              {currentView === "scripthub" && <ScriptHub />}
-              {currentView === "integrations" && <Integrations />}
-              {currentView === "vault" && <CloudVault />}
-              {currentView === "settings" && <SystemSettings />}
-            </Suspense>
-          </ErrorBoundary>
-        </div>
-      </main>
-      <SystemStatus />
+        </main>
+        <SystemStatus />
       </div>
-     </div>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
     </AuthProvider>
   );
 }
