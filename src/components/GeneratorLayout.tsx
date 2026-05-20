@@ -472,6 +472,7 @@ export default React.memo(function GeneratorLayout({
           <button
             onClick={handleGenerate}
             disabled={!prompt.trim() || isBusy}
+            data-action="generate-button"
             className={cn("flex items-center gap-2 h-12 px-6 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg active:scale-95 group", mode === "edit" ? "bg-sky-600 hover:bg-sky-500 disabled:bg-neutral-900" : "bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-900")}
           >
             {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : (

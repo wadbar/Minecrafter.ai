@@ -89,7 +89,7 @@ export default function GeneratorOutput({
                 className="flex items-center gap-2 h-6 px-3 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 rounded-md border border-emerald-500/20 text-[9px] font-mono font-bold uppercase tracking-wider transition-all"
               >
                 {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CloudUpload className="w-3 h-3" />}
-                {user ? "Store_Cloud" : "Login"}
+                {user ? "Save to Cloud Vault" : "Login"}
               </button>
              )}
            </div>

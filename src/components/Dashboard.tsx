@@ -17,13 +17,7 @@ export default function Dashboard({ setCurrentView }: Props) {
   
   const [chartData, setChartData] = React.useState<any[]>([]);
 
-  const [recentLogs, setRecentLogs] = React.useState([
-    { time: "18:04:12", type: "OK", typeColor: "text-emerald-500", msg: "Service Link Stable" },
-    { time: "18:04:15", type: "INFO", typeColor: "text-sky-500", msg: "Environment Bootstrap" },
-    { time: "18:05:01", type: "SYS", typeColor: "text-emerald-500", msg: "Buffer Purge" },
-    { time: "18:06:44", type: "WARN", typeColor: "text-amber-500", msg: "High Resource Usage" },
-    { time: "18:07:22", type: "OK", typeColor: "text-emerald-500", msg: "Log: Cleanup Complete" }
-  ]);
+  const [recentLogs, setRecentLogs] = React.useState<{time: string, type: string, typeColor: string, msg: string}[]>([]);
 
   React.useEffect(() => {
     let active = true;
@@ -34,8 +28,6 @@ export default function Dashboard({ setCurrentView }: Props) {
       cpu: 0,
       memory: 0,
     })));
-
-    const startTime = Date.now();
 
     // Verification Handshake
     fetch("/api/handshake")
@@ -69,24 +61,6 @@ export default function Dashboard({ setCurrentView }: Props) {
     };
     fetchRecentArtifacts();
     
-    const logInterval = setInterval(() => {
-      if (!active) return;
-      const msgs = ["Lógica otimizada.", "Refinando ativos...", "Aguardando telemetria.", "Workers inicializados.", "Sincronizando nós...", "Ciclo finalizado.", "Caso especial tratado.", "Limpeza de recursos.", "Operacional."];
-      const types = [ { t: "OK", c: "text-emerald-500" }, { t: "INFO", c: "text-sky-500" }, { t: "DB", c: "text-amber-500" }, { t: "SYS", c: "text-emerald-500" }, { t: "SEC", c: "text-violet-500" } ];
-      
-      const rMsg = msgs[Math.floor(Math.random() * msgs.length)];
-      const rType = types[Math.floor(Math.random() * types.length)];
-      
-      const now = new Date();
-      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-      
-      setRecentLogs(prev => {
-        const next = [...prev, { time: timeStr, type: rType.t, typeColor: rType.c, msg: rMsg }];
-        if (next.length > 5) next.shift();
-        return next;
-      });
-    }, 4500);
-
     const interval = setInterval(async () => {
       if (!active) return;
       
@@ -124,7 +98,6 @@ export default function Dashboard({ setCurrentView }: Props) {
     return () => {
        active = false;
        clearInterval(interval);
-       clearInterval(logInterval);
     };
   }, []);
 

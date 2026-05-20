@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from "react";
 import GeneratorLayout from "./GeneratorLayout";
 import { OfflineEngine } from "../services/OfflineEngine";
-import { Download as DownloadIcon, Accessibility, Monitor, User, BookOpen, Sliders, Loader2, Shirt, Trash2, CheckCircle2, RotateCcw, PlusCircle } from "lucide-react";
+import { Download as DownloadIcon, Accessibility, Monitor, User, BookOpen, Sliders, Loader2, Shirt, Trash2, CheckCircle2, RotateCcw, PlusCircle, CloudUpload } from "lucide-react";
 import SkinViewer3D from "./SkinViewer3D";
 import { saveAs } from "file-saver";
 import { toast } from "sonner";
@@ -43,6 +43,7 @@ export default function SkinGenerator() {
   const [ditherLevel, setDitherLevel] = useState(0);
   const [currentSkinUrl, setCurrentSkinUrl] = useState<string | null>("https://textures.minecraft.net/texture/31cf464973347fd5fd7546654e95f082e6ef920c812d348003f90b8ff4f0ed83"); // Steve default texture
   const [history, setHistory] = useState<SkinHistoryItem[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
   const [isExporting, setIsExporting] = useState(false);
   const [lastBasePrompt, setLastBasePrompt] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -51,6 +52,70 @@ export default function SkinGenerator() {
   const [skinInputError, setSkinInputError] = useState(false);
   const [capeInputError, setCapeInputError] = useState(false);
   const [telemetryLogs, setTelemetryLogs] = useState<{id: string, msg: string, type: 'info' | 'warn' | 'success'}[]>([]);
+  const [isSavingCloud, setIsSavingCloud] = useState(false);
+
+  const canUndo = history.length > 0 && historyIndex < history.length - 1;
+  const canRedo = historyIndex > 0;
+
+  const applyHistoryState = useCallback((item: SkinHistoryItem) => {
+    setCurrentSkinUrl(item.url);
+    setDetailLevel(item.params.detailLevel);
+    setColorIntensity(item.params.colorIntensity);
+    setStylization(item.params.stylization);
+    setContrast(item.params.contrast || 50);
+    setPatternScale(item.params.patternScale || 50);
+    setDitherLevel(item.params.ditherLevel || 0);
+    setModelType(item.params.modelType);
+    setUseCape(item.params.useCape || false);
+    setPalette(item.params.palette || "Default");
+    if (item.params.customColor) setCustomColor(item.params.customColor);
+    window.dispatchEvent(new CustomEvent('set-builder-prompt', { detail: item.params.prompt }));
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (!canUndo) return;
+    const nextIndex = historyIndex + 1;
+    setHistoryIndex(nextIndex);
+    applyHistoryState(history[nextIndex]);
+    toast.info("State Reverted", { description: "Previous generation state applied." });
+  }, [canUndo, historyIndex, history, applyHistoryState]);
+
+  const handleRedo = useCallback(() => {
+    if (!canRedo) return;
+    const nextIndex = historyIndex - 1;
+    setHistoryIndex(nextIndex);
+    applyHistoryState(history[nextIndex]);
+    toast.info("State Restored", { description: "Next generation state applied." });
+  }, [canRedo, historyIndex, history, applyHistoryState]);
+
+
+  const handleSaveCloud = async () => {
+    const skinToSave = (externalSkinUrl && !skinInputError) ? externalSkinUrl : currentSkinUrl;
+    if (!skinToSave) return;
+    
+    if (!user) {
+      toast.info("Authentication Required", { description: "Sign in to enable Cloud Vault features." });
+      return;
+    }
+    
+    setIsSavingCloud(true);
+    try {
+      const config = {
+        detailLevel, colorIntensity, stylization, contrast, patternScale, ditherLevel, modelType, useCape, palette, customColor
+      };
+      await saveArtifact(
+        'skin', 
+        `Skin Forge [${modelType.toUpperCase()}]: ${lastBasePrompt ? lastBasePrompt.slice(0, 30) : "Manual_Import"}...`, 
+        skinToSave, 
+        config
+      );
+      toast.success("Artifact stored in Cloud Vault.");
+    } catch (err: any) {
+      toast.error("Vault Failure", { description: err?.message || "Failed to save." });
+    } finally {
+      setIsSavingCloud(false);
+    }
+  };
 
   const addLog = useCallback((msg: string, type: 'info' | 'warn' | 'success' = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -190,7 +255,11 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
             ...config
           }
         };
-        setHistory(prev => [newItem, ...prev.filter(h => h.url !== url).slice(0, 5)]);
+        setHistory(prev => {
+          const currentValidHistory = historyIndex > 0 ? prev.slice(historyIndex) : prev;
+          return [newItem, ...currentValidHistory.filter(h => h.url !== url).slice(0, 5)];
+        });
+        setHistoryIndex(0);
       };
 
       if (!navigator.onLine) {
@@ -243,7 +312,7 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
       if (user) {
         try {
           // Attempting deep archival of the generated artifact
-          await saveArtifact('skin', `Skin Forge [${config.modelType.toUpperCase()}]: ${activePrompt.slice(0, 30)}...`, data.result);
+          await saveArtifact('skin', `Skin Forge [${config.modelType.toUpperCase()}]: ${activePrompt.slice(0, 30)}...`, data.result, config);
           addLog("Artifact persisted to Cloud Vault.", "success");
         } catch (e) {
           addLog("Cloud persistence offline. Local buffer only.", "warn");
@@ -885,18 +954,34 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
              </div>
            )}
 
-           <button
-             onClick={() => handleDownload(skinToDisplay)}
-             disabled={isExporting}
-             className={cn(
-               "flex items-center gap-4 px-10 py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all rounded-xl text-white font-bold text-sm uppercase tracking-[0.2em] shadow-[0_0_35px_rgba(16,185,129,0.4)] border border-emerald-400/30 group relative overflow-hidden",
-               isExporting && "opacity-50 cursor-not-allowed"
-             )}
-           >
-             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-             {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <DownloadIcon className="w-5 h-5 relative z-10 group-hover:animate-bounce" />}
-             <span className="relative z-10">{isExporting ? "Exporting..." : "Export_Binary_Skin"}</span>
-           </button>
+           <div className="flex flex-col gap-3 w-full max-w-[400px]">
+             <button
+               onClick={() => handleDownload(skinToDisplay)}
+               disabled={isExporting}
+               className={cn(
+                 "flex w-full justify-center items-center gap-4 px-10 py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all rounded-xl text-white font-bold text-sm uppercase tracking-[0.2em] shadow-[0_0_35px_rgba(16,185,129,0.4)] border border-emerald-400/30 group relative overflow-hidden",
+                 isExporting && "opacity-50 cursor-not-allowed"
+               )}
+             >
+               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+               {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <DownloadIcon className="w-5 h-5 relative z-10 group-hover:animate-bounce" />}
+               <span className="relative z-10">{isExporting ? "Exporting..." : "Export_Binary_Skin"}</span>
+             </button>
+
+             <button
+               onClick={handleSaveCloud}
+               disabled={isSavingCloud}
+               data-action="save"
+               className={cn(
+                 "flex w-full justify-center items-center gap-4 px-10 py-3 bg-neutral-900 hover:bg-neutral-800 active:scale-95 transition-all rounded-xl text-emerald-400 font-bold text-xs uppercase tracking-[0.2em] shadow-lg border border-emerald-500/20 group relative overflow-hidden",
+                 isSavingCloud && "opacity-50 cursor-not-allowed"
+               )}
+             >
+               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-500/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+               {isSavingCloud ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4 relative z-10 group-hover:-translate-y-1 transition-transform" />}
+               <span className="relative z-10">{isSavingCloud ? "Saving..." : "Save to Cloud Vault"}</span>
+             </button>
+           </div>
         </div>
 
         {/* Flat Texture & Exporter */}
@@ -942,22 +1027,39 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
             {/* History Buffer */}
             {history.length > 0 && (
               <div className="pt-6 border-t border-neutral-900 mt-2">
-                <div className="flex items-center justify-between mb-4">
+                 <div className="flex items-center justify-between mb-4">
                    <div className="flex items-center gap-2">
                      <span className="text-[10px] font-mono font-black text-neutral-600 uppercase tracking-[0.3em]">Temporal_Buffer</span>
                      <div className="px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-500 text-[8px] font-bold">{history.length}/6</div>
                    </div>
-                   <button 
-                     onClick={() => {
-                        setHistory([]);
-                        toast.info("Buffer Purged", { description: "Memory sectors cleared successfully." });
-                     }} 
-                     className="text-[9px] text-neutral-700 hover:text-red-500 transition-colors uppercase font-black tracking-widest flex items-center gap-1 group"
-                   >
-                     <Trash2 className="w-3 h-3 group-hover:scale-110 transition-transform" />
-                     Clear
-                   </button>
-                </div>
+                   <div className="flex items-center gap-3">
+                     <button
+                       onClick={handleUndo}
+                       disabled={!canUndo}
+                       className="text-[9px] text-neutral-500 disabled:opacity-25 hover:text-sky-500 transition-colors uppercase font-black tracking-widest"
+                     >
+                       Undo
+                     </button>
+                     <button
+                       onClick={handleRedo}
+                       disabled={!canRedo}
+                       className="text-[9px] text-neutral-500 disabled:opacity-25 hover:text-emerald-500 transition-colors uppercase font-black tracking-widest"
+                     >
+                       Redo
+                     </button>
+                     <button 
+                       onClick={() => {
+                          setHistory([]);
+                          setHistoryIndex(-1);
+                          toast.info("Buffer Purged", { description: "Memory sectors cleared successfully." });
+                       }} 
+                       className="text-[9px] text-neutral-700 hover:text-red-500 transition-colors uppercase font-black tracking-widest flex items-center gap-1 group ml-2"
+                     >
+                       <Trash2 className="w-3 h-3 group-hover:scale-110 transition-transform" />
+                       Clear
+                     </button>
+                   </div>
+                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   {history.map((item, idx) => {
                     const isCurrent = currentSkinUrl === item.url;
@@ -1043,8 +1145,22 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
       toast.info("Comando de Voz", { description: "Estabilização de câmera ativada." });
     }
 
+    // Action Commands explicitly in SkinGenerator
+    if (cmd.includes("generate skin") || cmd.includes("gerar skin")) {
+      // Trigger global generate via GeneratorLayout or DOM shortcut
+      const genBtn = document.querySelector('[data-action="generate-button"]') as HTMLButtonElement | null;
+      if (genBtn) genBtn.click();
+      toast.success("Comando Executado", { description: "Iniciando geração de skin." });
+      handled = true;
+    }
+
+    if (cmd.includes("save skin") || cmd.includes("salvar skin") || cmd.includes("guardar skin")) {
+      handleSaveCloud();
+      handled = true;
+    }
+
     return handled;
-  }, []);
+  }, [handleSaveCloud]);
 
   return (
     <GeneratorLayout
@@ -1059,7 +1175,7 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
       endpointType=""
       extraControls={extraControls}
       onGenerate={generateSkin}
-      onSaveCloud={async (title, result) => await saveArtifact("skin", title, result)}
+      onSaveCloud={async (title, result) => await saveArtifact("skin", title, result, { modelType, palette, detailLevel, colorIntensity, stylization, contrast, patternScale, ditherLevel, useCape })}
       renderOutput={outputContent}
       onVoiceCommand={handleVoiceCommand}
       parameters={{ modelType, palette, detailLevel, colorIntensity, stylization, contrast, patternScale, ditherLevel, useCape }}

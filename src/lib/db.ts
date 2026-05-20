@@ -1,7 +1,7 @@
 import { collection, addDoc, serverTimestamp, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
-export async function saveArtifact(type: 'skin' | 'map' | 'mod' | 'texture' | 'storyteller' | 'voxel', title: string, content: string) {
+export async function saveArtifact(type: 'skin' | 'map' | 'mod' | 'texture' | 'storyteller' | 'voxel', title: string, content: string, parameters?: any) {
   if (!auth.currentUser) throw new Error("Usuário não autenticado");
 
   try {
@@ -10,6 +10,7 @@ export async function saveArtifact(type: 'skin' | 'map' | 'mod' | 'texture' | 's
       type,
       title,
       content,
+      parameters: parameters || null,
       createdAt: serverTimestamp()
     });
   } catch (error: any) {

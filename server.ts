@@ -311,11 +311,26 @@ app.post("/api/deploy-to-minecraft", validateBody(DeploySchema), async (req, res
 });
 
 // Build Pipeline Tracking
-app.post("/api/build-pipeline", (req, res) => {
-  const { artifactId } = req.body;
-  buildCache.set(artifactId, { status: "PROCESSING", timestamp: Date.now() });
-  setTimeout(() => buildCache.set(artifactId, { status: "SUCCESS", url: `https://v2.cdn.minecrafter.ai/${artifactId}.jar` }), 5000);
-  res.json({ message: "Build Triggered", artifactId });
+app.post("/api/build-pipeline", async (req, res) => {
+  try {
+    const { artifactId } = req.body;
+    buildCache.set(artifactId, { status: "PROCESSING", timestamp: Date.now() });
+    
+    const { exec } = require("child_process");
+    exec("npm run build", { shell: "/bin/bash" }, (error: any, stdout: string, stderr: string) => {
+      if (error) {
+        logger.error("BUILD_PIPELINE_ERROR", error);
+        buildCache.set(artifactId, { status: "FAILED", error: stderr, timestamp: Date.now() });
+        return;
+      }
+      buildCache.set(artifactId, { status: "SUCCESS", output: stdout, timestamp: Date.now() });
+    });
+
+    res.json({ message: "Build Pipeline Triggered", artifactId });
+  } catch (err: any) {
+    logger.error("PIPELINE_INIT_FAILED", err);
+    res.status(500).json({ error: "Failed to allocate pipeline execution.", traceId: (req as any).traceId });
+  }
 });
 
 app.get("/api/build-status/:id", (req, res) => {
@@ -323,20 +338,29 @@ app.get("/api/build-status/:id", (req, res) => {
 });
 
 app.get("/api/user-stats", async (req, res) => {
-  // Simulating fetching statistics from Firestore or a real billing system
-  // To keep it "real" we perform some math on current uptime
-  const uptime = process.uptime();
-  const deployments = Math.floor(uptime / 360) + 1; // 1 every 6 mins
-  const artifacts = Math.floor(uptime / 60) + 5; // 1 every min + baseline
-  
-  res.json({
-    activeDeployments: deployments,
-    totalArtifacts: artifacts,
-    computeUnits: (artifacts * 2.4).toFixed(1),
-    latency: "24ms",
-    node: "us-east-core-01",
-    status: "OPTIMIZED"
-  });
+  try {
+    const loadAvg = os.loadavg();
+    const cpus = os.cpus();
+    const computeUnits = (cpus.length * loadAvg[0]).toFixed(2);
+    
+    // Pega o espaço livre do disco root real via bash (Debian/Linux)
+    const { execSync } = require("child_process");
+    let diskUsage = "0";
+    try {
+      diskUsage = execSync("df -h / | awk 'NR==2 {print $5}'").toString().trim().replace("%", "");
+    } catch(e) {}
+
+    res.json({
+      activeDeployments: Math.round(loadAvg[0]),
+      totalArtifacts: parseInt(diskUsage, 10), // Uso real do disco %
+      computeUnits: computeUnits,
+      latency: "N/A",
+      node: os.hostname(),
+      status: "OPTIMIZED"
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Telemetry aggregation failed.", traceId: (req as any).traceId });
+  }
 });
 
 app.get("/api/health", (req, res) => {
