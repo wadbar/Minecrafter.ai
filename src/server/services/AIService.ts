@@ -29,9 +29,9 @@ export class AIService {
   private circuitBreaker: CircuitBreaker;
   private modelName: string;
 
-  constructor(modelName: string = "gemini-3.1-pro-preview") {
+  constructor(modelName: string = "gemini-3.5-flash") {
     this.modelName = modelName;
-    this.circuitBreaker = new CircuitBreaker(`Gemini-${modelName}`, 3, 20000);
+    this.circuitBreaker = new CircuitBreaker(`Gemini-${modelName}`, 3, 30000);
   }
 
   private sanitize(input: string): string {
@@ -115,4 +115,4 @@ export class AIService {
 }
 
 export const aiService = new AIService();
-export const fastAiService = new AIService("gemini-3.5-flash");
+export const fastAiService = new AIService("gemini-3.1-flash-lite");

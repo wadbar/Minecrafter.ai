@@ -3,11 +3,13 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid, PerspectiveCamera, Environment, GizmoHelper, GizmoViewport, Html, Float, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import { motion, AnimatePresence } from "motion/react";
-import { Box, Layers, Play, Save, Trash2, Maximize, Target, Info, Sparkles, Database, Download, Cpu, Activity, Zap, FileJson, FileCode, BoxSelect, History, Settings2, BarChart3, ChevronRight } from "lucide-react";
+import { Box, Layers, Play, Save, Trash2, Maximize, Target, Info, Sparkles, Database, Download, Cpu, Activity, Zap, FileJson, FileCode, BoxSelect, History, Settings2, BarChart3, ChevronRight, RotateCcw, RotateCw, FolderOpen } from "lucide-react";
 import { cn } from "../lib/utils";
 import { toast } from "sonner";
 import { GeometryEngine } from "../lib/geometry-engine";
 import { FrontLogger } from "../lib/logger";
+import { saveArtifact } from "../lib/db";
+import { auth } from "../lib/firebase";
 
 // --- Types ---
 interface Voxel {
@@ -104,6 +106,8 @@ export default function VoxelLab() {
   const [data, setData] = useState<VoxelData | null>(null);
   const [history, setHistory] = useState<VoxelData[]>([]);
   const [activeTab, setActiveTab] = useState<"inspect" | "layers" | "telemetry" | "history">("inspect");
+  const [undoStack, setUndoStack] = useState<VoxelData[]>([]);
+  const [redoStack, setRedoStack] = useState<VoxelData[]>([]);
   const [wireframe, setWireframe] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -157,6 +161,13 @@ export default function VoxelLab() {
       
       setData(newData);
       setHistory(prev => [newData, ...prev].slice(0, 10));
+      
+      // Update Undo/Redo Stacks
+      if (data) {
+        setUndoStack(prev => [data, ...prev].slice(0, 20));
+      }
+      setRedoStack([]);
+
       toast.success("Estrutura Sincronizada", { 
         description: `Matriz compilada em ${newData.stats.generationTime}ms.` 
       });
@@ -189,6 +200,80 @@ export default function VoxelLab() {
       toast.success("Exportação Finalizada", { description: "Arquivo .stl binário pronto." });
     } catch (e: any) {
       toast.error("Falha na Exportação", { description: e.message });
+    }
+  };
+
+  const undo = () => {
+    if (undoStack.length === 0) return;
+    const previous = undoStack[0];
+    const newUndo = undoStack.slice(1);
+    
+    if (data) {
+      setRedoStack(prev => [data, ...prev]);
+    }
+    
+    setData(previous);
+    setUndoStack(newUndo);
+    FrontLogger.info("UNDO_EXECUTED", { remaining: newUndo.length });
+  };
+
+  const redo = () => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[0];
+    const newRedo = redoStack.slice(1);
+    
+    if (data) {
+      setUndoStack(prev => [data, ...prev]);
+    }
+    
+    setData(next);
+    setRedoStack(newRedo);
+    FrontLogger.info("REDO_EXECUTED", { remaining: newRedo.length });
+  };
+
+  const saveSession = () => {
+    if (!data) return toast.error("Sem dados para salvar");
+    try {
+      const session = {
+        data,
+        prompt,
+        timestamp: Date.now()
+      };
+      localStorage.setItem("voxel_lab_session", JSON.stringify(session));
+      toast.success("Sessão Salva Localmente", { description: "Matriz persistida no buffer do navegador." });
+      FrontLogger.info("SESSION_PERSISTED_LOCAL");
+    } catch (e: any) {
+      toast.error("Falha ao salvar sessão");
+    }
+  };
+
+  const saveToCloud = async () => {
+    if (!data) return toast.error("Sem dados para arquivar");
+    if (!auth.currentUser) return toast.error("Autenticação necessária", { description: "Faça login para salvar na nuvem." });
+
+    const cloudId = toast.loading("Arquivando Matriz na Nuvem...");
+    try {
+      await saveArtifact('voxel', `Voxel: ${data.name}`, JSON.stringify(data));
+      toast.success("Arquivado com Sucesso", { id: cloudId, description: "Estrutura persistida no Cloud Vault." });
+      FrontLogger.info("VOXEL_CLOUD_PERSISTENCE_SUCCESS");
+    } catch (e: any) {
+      toast.error("Falha no Cloud Vault", { id: cloudId, description: e.message });
+      FrontLogger.error("VOXEL_CLOUD_PERSISTENCE_FAULT", { error: e.message });
+    }
+  };
+
+  const loadSession = () => {
+    try {
+      const saved = localStorage.getItem("voxel_lab_session");
+      if (!saved) return toast.error("Nenhuma sessão salva encontrada");
+      
+      const session = JSON.parse(saved);
+      setData(session.data);
+      setPrompt(session.prompt);
+      toast.success("Sessão Restaurada", { description: `Matriz "${session.data.name}" carregada com sucesso.` });
+      FrontLogger.info("SESSION_LOADED_LOCAL");
+    } catch (e: any) {
+      toast.error("Falha ao carregar sessão");
     }
   };
 
@@ -231,10 +316,22 @@ export default function VoxelLab() {
            <button 
             onClick={() => setShowSettings(!showSettings)}
             className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-400 hover:text-white hover:border-neutral-700 transition-all active:scale-95"
+            title="Configurações"
            >
              <Settings2 className="w-5 h-5" />
            </button>
-           <button className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-400 hover:text-white hover:border-neutral-700 transition-all active:scale-95">
+           <button 
+            onClick={loadSession}
+            className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-400 hover:text-white hover:border-neutral-700 transition-all active:scale-95"
+            title="Carregar Sessão"
+           >
+             <FolderOpen className="w-5 h-5" />
+           </button>
+           <button 
+            onClick={saveSession}
+            className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-400 hover:text-white hover:border-neutral-700 transition-all active:scale-95"
+            title="Salvar Sessão"
+           >
              <Save className="w-5 h-5" />
            </button>
            <div className="relative group">
@@ -251,6 +348,9 @@ export default function VoxelLab() {
                    </button>
                    <button onClick={exportSTL} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-bold text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">
                       <BoxSelect className="w-4 h-4 text-sky-500" /> Export (.stl) Binary
+                   </button>
+                   <button onClick={saveToCloud} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-bold text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">
+                      <Zap className="w-4 h-4 text-emerald-500" /> Cloud Archival
                    </button>
                    <button onClick={() => toast.info("Exportação JSON em buffer.")} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-bold text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">
                       <FileJson className="w-4 h-4 text-amber-500" /> Export Data (.json)
@@ -270,6 +370,28 @@ export default function VoxelLab() {
 
           {/* Viewport Control Bar */}
           <div className="absolute top-8 right-8 flex flex-col gap-3">
+             <button 
+               onClick={undo}
+               disabled={undoStack.length === 0}
+               className={cn(
+                 "p-3 rounded-2xl border backdrop-blur-xl transition-all shadow-xl active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed",
+                 "bg-neutral-950/60 border-white/5 text-neutral-400 hover:text-white"
+               )}
+               title="Desfazer"
+             >
+               <RotateCcw className="w-6 h-6" />
+             </button>
+             <button 
+               onClick={redo}
+               disabled={redoStack.length === 0}
+               className={cn(
+                 "p-3 rounded-2xl border backdrop-blur-xl transition-all shadow-xl active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed",
+                 "bg-neutral-950/60 border-white/5 text-neutral-400 hover:text-white"
+               )}
+               title="Refazer"
+             >
+               <RotateCw className="w-6 h-6" />
+             </button>
              <button 
                onClick={() => setWireframe(!wireframe)}
                className={cn(

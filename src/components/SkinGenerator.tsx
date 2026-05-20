@@ -1062,6 +1062,7 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
       onSaveCloud={async (title, result) => await saveArtifact("skin", title, result)}
       renderOutput={outputContent}
       onVoiceCommand={handleVoiceCommand}
+      parameters={{ modelType, palette, detailLevel, colorIntensity, stylization, contrast, patternScale, ditherLevel, useCape }}
     />
   );
 }

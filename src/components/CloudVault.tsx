@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/firebase";
-import { Loader2, Trash2, ExternalLink, Box, FileCode2, Map, Users, Paintbrush, Shirt, Zap, CheckCircle, Activity } from "lucide-react";
+import { Loader2, Trash2, ExternalLink, Box, FileCode2, Map, Users, Paintbrush, Shirt, Zap, CheckCircle, Activity, Search, Filter, Cuboid, X } from "lucide-react";
 import Markdown from "react-markdown";
 import { cn } from "../lib/utils";
 import DOMPurify from "dompurify";
@@ -23,6 +23,16 @@ const typeIcons: Record<string, React.ReactNode> = {
   mod: <FileCode2 className="w-5 h-5 text-sky-400" />,
   texture: <Paintbrush className="w-5 h-5 text-amber-400" />,
   storyteller: <Users className="w-5 h-5 text-fuchsia-400" />,
+  voxel: <Cuboid className="w-5 h-5 text-amber-500" />,
+};
+
+const typeColors: Record<string, string> = {
+  skin: "text-pink-400 border-pink-500/20 bg-pink-500/5",
+  map: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5",
+  mod: "text-sky-400 border-sky-500/20 bg-sky-500/5",
+  texture: "text-amber-400 border-amber-500/20 bg-amber-500/5",
+  storyteller: "text-fuchsia-400 border-fuchsia-500/20 bg-fuchsia-500/5",
+  voxel: "text-amber-500 border-amber-500/20 bg-amber-500/5",
 };
 
 export default function CloudVault() {
@@ -30,6 +40,8 @@ export default function CloudVault() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<string>("all");
 
   // CI/CD Status
   const [buildStatus, setBuildStatus] = useState<string | null>(null);
@@ -65,6 +77,15 @@ export default function CloudVault() {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
   }, [user]);
+
+  const filteredArtifacts = useMemo(() => {
+    return artifacts.filter(art => {
+      const matchesSearch = art.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                           art.content.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesType = activeFilter === "all" || art.type === activeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [artifacts, searchQuery, activeFilter]);
 
   const handleTriggerBuild = async (art: Artifact) => {
     setIsCompiling(true);
@@ -155,11 +176,48 @@ export default function CloudVault() {
           <h2 className="text-4xl font-bold tracking-tighter text-white">Central Artifacts</h2>
           <p className="text-sm text-neutral-500 font-medium">Arquivos estruturais em alta disponibilidade (SRE Ready).</p>
         </div>
-        <div className="px-4 py-2 bg-neutral-950 border border-neutral-800 rounded-lg">
-           <div className="text-[9px] font-mono text-neutral-600 uppercase mb-1">Registry_Load</div>
-           <div className="text-sm font-bold text-white font-mono">{artifacts.length} Active_Nodes</div>
+        <div className="flex flex-col items-end gap-2">
+           <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 p-1 px-2 rounded-lg">
+              <Search className="w-3.5 h-3.5 text-neutral-500" />
+              <input 
+                type="text" 
+                placeholder="Search index..." 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="bg-transparent border-none outline-none text-[11px] font-mono text-neutral-300 w-48 placeholder:text-neutral-700"
+              />
+              {searchQuery && <X className="w-3 h-3 text-neutral-600 cursor-pointer" onClick={() => setSearchQuery("")} />}
+           </div>
+           <div className="text-[9px] font-mono text-neutral-600 uppercase">
+              Registry_Nodes: <span className="text-white">{artifacts.length}</span> // Filtered: <span className="text-emerald-500">{filteredArtifacts.length}</span>
+           </div>
         </div>
       </header>
+
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+         <button 
+           onClick={() => setActiveFilter("all")}
+           className={cn(
+             "px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all",
+             activeFilter === "all" ? "bg-white text-black border-white" : "text-neutral-500 border-neutral-800 hover:border-neutral-600"
+           )}
+         >
+           All_Artifacts
+         </button>
+         {Object.keys(typeIcons).map(type => (
+           <button 
+             key={type}
+             onClick={() => setActiveFilter(type)}
+             className={cn(
+               "px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+               activeFilter === type ? "bg-emerald-500 text-black border-emerald-500" : "text-neutral-500 border-neutral-800 hover:border-neutral-600"
+             )}
+           >
+             {typeIcons[type]} {type}
+           </button>
+         ))}
+      </div>
 
       <div className="flex-1 min-h-0 flex bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden shadow-2xl divide-x divide-neutral-900">
         {/* Sidebar Registry */}
@@ -171,10 +229,10 @@ export default function CloudVault() {
            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
             {loading ? (
               [1,2,3,4,5].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl bg-neutral-900/50" />)
-            ) : artifacts.length === 0 ? (
+            ) : filteredArtifacts.length === 0 ? (
               <div className="text-center p-12 text-neutral-700 font-mono text-[10px] uppercase font-bold italic tracking-wider">Empty_Registry</div>
             ) : (
-              artifacts.map(art => (
+              filteredArtifacts.map(art => (
                 <button
                   key={art.id}
                   onClick={() => setSelectedArtifact(art)}
@@ -209,7 +267,9 @@ export default function CloudVault() {
                <header className="flex-none h-14 border-b border-neutral-900 bg-black/40 px-6 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="text-sm font-bold text-white tracking-tight">{selectedArtifact.title}</div>
-                    <div className="px-2 py-0.5 bg-neutral-900 border border-neutral-800 text-neutral-500 text-[9px] font-mono uppercase tracking-widest rounded leading-none">{selectedArtifact.type}</div>
+                    <div className={cn("px-2 py-0.5 border text-neutral-500 text-[9px] font-mono uppercase tracking-widest rounded leading-none transition-colors", typeColors[selectedArtifact.type])}>
+                      {selectedArtifact.type}
+                    </div>
                   </div>
                   
                   <div className="flex items-center gap-2">
@@ -245,18 +305,26 @@ export default function CloudVault() {
                     >
                       <ExternalLink className="w-3 h-3" /> Export
                     </button>
+                    {selectedArtifact.type === "voxel" && (
+                       <button 
+                        onClick={() => window.dispatchEvent(new CustomEvent('sys-navigate', { detail: 'voxellab' }))}
+                        className="h-8 px-4 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded border border-amber-500/20 text-[10px] font-mono font-bold uppercase tracking-widest flex items-center gap-2"
+                       >
+                         <Cuboid className="w-3 h-3" /> Edit in Lab
+                       </button>
+                    )}
                   </div>
                </header>
                
                <div className="flex-1 overflow-auto custom-scrollbar p-10">
-                  {selectedArtifact.type === "skin" && selectedArtifact.content.includes("<svg") ? (
+                  {selectedArtifact.type === "skin" && (selectedArtifact.content.includes("<svg") || selectedArtifact.content.startsWith("data:image")) ? (
                     <div className="h-full flex items-center justify-center perspective-1000">
                        <div className="relative group animate-float-slow">
                           <div className="absolute inset-0 bg-emerald-500/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
                           <div 
                             className="w-96 h-96 bg-neutral-950 border-4 border-neutral-900 rounded-3xl shadow-2xl relative z-10 transition-transform duration-700 preserve-3d group-hover:rotate-y-12 group-hover:rotate-x-12"
                             style={{
-                              backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(selectedArtifact.content)}")`,
+                              backgroundImage: selectedArtifact.content.startsWith("data:image") ? `url("${selectedArtifact.content}")` : `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(selectedArtifact.content)}")`,
                               backgroundSize: '100% 100%',
                               backgroundRepeat: 'no-repeat',
                               imageRendering: 'pixelated'
@@ -267,7 +335,7 @@ export default function CloudVault() {
                           </div>
                           
                           <div className="absolute top-full left-1/2 -translate-x-1/2 mt-8 py-2 px-4 bg-neutral-900 border border-neutral-800 rounded-lg text-[9px] font-mono text-neutral-500 uppercase tracking-widest whitespace-nowrap">
-                             Mesh_Topology: steve x64 // UV-Layout: Valid
+                             Mesh_Topology: standard x64 // UV-Layout: Valid
                           </div>
                        </div>
                     </div>

@@ -4,7 +4,7 @@ import Prism from "prismjs";
 import "prismjs/themes/prism-tomorrow.css";
 import "prismjs/components/prism-java";
 import "prismjs/components/prism-javascript";
-import { Loader2, Box, Layers, Sparkles, BookOpen, Download } from "lucide-react";
+import { Loader2, Box, Layers, Sparkles, BookOpen, Download, RotateCcw, RotateCw, Copy, Cloud } from "lucide-react";
 import { saveArtifact } from "../lib/db";
 import { FrontLogger } from "../lib/logger";
 import { cn } from "../lib/utils";
@@ -95,6 +95,34 @@ export default function ModGenerator() {
   const [complexity, setComplexity] = useState("Standard");
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [telemetryLogs, setTelemetryLogs] = useState<{id: string, msg: string, type: 'info' | 'warn' | 'success'}[]>([]);
+
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [redoStack, setRedoStack] = useState<string[]>([]);
+  const [currentCode, setCurrentCode] = useState("");
+
+  const onGenerateComplete = useCallback((result: string) => {
+    if (currentCode) {
+      setUndoStack(prev => [currentCode, ...prev].slice(0, 20));
+    }
+    setRedoStack([]);
+    setCurrentCode(result);
+  }, [currentCode]);
+
+  const undo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    const prev = undoStack[0];
+    setRedoStack(r => [currentCode, ...r]);
+    setCurrentCode(prev);
+    setUndoStack(u => u.slice(1));
+  }, [currentCode, undoStack]);
+
+  const redo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[0];
+    setUndoStack(u => [currentCode, ...u]);
+    setCurrentCode(next);
+    setRedoStack(r => r.slice(1));
+  }, [currentCode, redoStack]);
 
   const addLog = useCallback((msg: string, type: 'info' | 'warn' | 'success' = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -371,6 +399,35 @@ export default function ModGenerator() {
           </div>
         </div>
 
+        {currentCode && (
+           <div className="ml-auto flex items-center gap-2 bg-neutral-900 px-2 py-1.5 rounded-lg border border-neutral-800">
+              <button 
+                onClick={undo} disabled={undoStack.length === 0} 
+                className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors"
+                title="Undo Generation"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </button>
+              <button 
+                onClick={redo} disabled={redoStack.length === 0} 
+                className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors"
+                title="Redo Generation"
+              >
+                <RotateCw className="w-3 h-3" />
+              </button>
+              <div className="w-px h-3 bg-neutral-800 mx-1" />
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(currentCode);
+                  toast.success("Código Copiado");
+                }}
+                className="p-1 text-sky-400 hover:text-sky-300 transition-colors"
+                title="Copy Source"
+              >
+                <Copy className="w-3 h-3" />
+              </button>
+           </div>
+         )}
       </div>
 
       <div className="bg-neutral-900/50 border border-neutral-800 p-4 rounded-lg text-xs leading-relaxed animate-in fade-in slide-in-from-top-2">
@@ -455,10 +512,13 @@ export default function ModGenerator() {
       ]}
       endpointType="generate-mod"
       onGenerate={generateMod}
+      onGenerateComplete={onGenerateComplete}
       onSaveCloud={handleSaveCloud}
       supportsEditing={true}
       extraControls={controls}
+      parameters={{ framework, version, complexity }}
       renderOutput={(result, isGenerating) => {
+        const finalResult = isGenerating ? result : currentCode || result;
         return (
           <div className="space-y-6">
             {/* Telemetry Logs Display */}
@@ -482,13 +542,13 @@ export default function ModGenerator() {
               </div>
             )}
 
-            {isGenerating ? (
+            {isGenerating && !finalResult ? (
               <div className="py-20 text-center">
                 <Loader2 className="w-8 h-8 animate-spin text-sky-500 mx-auto mb-4" />
                 <p className="text-[10px] font-mono text-sky-500 uppercase tracking-[0.3em] animate-pulse">Compiling Logic...</p>
               </div>
             ) : (
-              <OutputWrapper result={result} onDownload={() => handleDownloadJar(result)} />
+              <OutputWrapper result={finalResult} onDownload={() => handleDownloadJar(finalResult)} />
             )}
           </div>
         );

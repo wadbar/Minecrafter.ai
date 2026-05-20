@@ -10,6 +10,7 @@ import {
 import { Toaster } from 'sonner';
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
+import CommandPalette from "./components/CommandPalette";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SystemStatus from "./components/SystemStatus";
 import { AuthProvider } from "./lib/firebase";
@@ -32,6 +33,7 @@ export type ViewState = "dashboard" | "map" | "mod" | "texture" | "skin" | "stor
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [telemetry, setTelemetry] = useState({ cpu: 42, load: 22 });
 
   useEffect(() => {
@@ -101,9 +103,19 @@ export default function App() {
     window.addEventListener('sys-navigate', handleNavigation);
     window.addEventListener('VOICE_RECOGNITION_READY', handleVoiceReady);
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
     return () => {
       window.removeEventListener('sys-navigate', handleNavigation);
       window.removeEventListener('VOICE_RECOGNITION_READY', handleVoiceReady);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
@@ -117,6 +129,11 @@ export default function App() {
   return (
     <AuthProvider>
       <div className="flex flex-col h-screen bg-neutral-950 overflow-hidden font-sans selection:bg-emerald-500/30 industrial-bg">
+        <CommandPalette 
+          isOpen={commandPaletteOpen} 
+          onClose={() => setCommandPaletteOpen(false)} 
+          onNavigate={setCurrentView} 
+        />
         {/* Desktop Title Bar (Chromium Shell Simulation) */}
         <div className="h-8 bg-black border-b border-white/5 flex items-center justify-between px-4 z-50 shrink-0 select-none">
           <div className="flex items-center gap-4">

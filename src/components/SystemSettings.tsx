@@ -1,6 +1,8 @@
 import React from "react";
-import { Settings, Shield, Zap, Eye, EyeOff, Server } from "lucide-react";
+import { Settings, Shield, Zap, Eye, EyeOff, Server, LogOut } from "lucide-react";
 import { cn } from "../lib/utils";
+import { auth } from "../lib/firebase";
+import { toast } from "sonner";
 
 interface SettingItemProps {
   id: string;
@@ -41,6 +43,17 @@ export default function SystemSettings() {
 
   const toggle = (id: string) => {
     setSettings(prev => ({ ...prev, [id as keyof typeof prev]: !prev[id as keyof typeof prev] }));
+  };
+
+  const handleReset = async () => {
+    try {
+      localStorage.clear();
+      await auth.signOut();
+      toast.success("Sistema Reiniciado", { description: "Sessão encerrada e cache purgado." });
+      window.location.reload();
+    } catch (e) {
+      toast.error("Erro ao Reiniciar");
+    }
   };
 
   return (
@@ -174,7 +187,11 @@ export default function SystemSettings() {
 
       <div className="p-8 rounded-2xl bg-neutral-900/50 border border-neutral-800 text-center space-y-4">
          <p className="text-[10px] font-mono text-neutral-600 uppercase tracking-widest font-bold">Zera_Sessão_Global</p>
-         <button className="px-6 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg border border-red-500/20 text-xs font-bold transition-all uppercase tracking-widest">
+         <button 
+           onClick={handleReset}
+           className="px-6 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg border border-red-500/20 text-xs font-bold transition-all uppercase tracking-widest flex items-center gap-2 mx-auto"
+         >
+           <LogOut className="w-4 h-4" />
            Limpar Todos os Cache e Sair
          </button>
       </div>

@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useMemo, useRef } from "react";
 import GeneratorLayout from "./GeneratorLayout";
 import { OfflineEngine } from "../services/OfflineEngine";
-import { Loader2, Zap, Layers, Globe, Database, Map as MapIcon, Link, Server, Shield, Send } from "lucide-react";
+import { Loader2, Zap, Layers, Globe, Database, Map as MapIcon, Link, Server, Shield, Send, RotateCcw, RotateCw, Download, Cloud } from "lucide-react";
 import { saveArtifact } from "../lib/db";
 import { cn } from "../lib/utils";
 import { toast } from "sonner";
@@ -135,6 +135,35 @@ export default function MapGenerator() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showDeployment, setShowDeployment] = useState(false);
   const [deployLoading, setDeployLoading] = useState(false);
+  
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [redoStack, setRedoStack] = useState<string[]>([]);
+  const [currentResult, setCurrentResult] = useState("");
+
+  const onGenerateComplete = useCallback((result: string) => {
+    if (currentResult) {
+      setUndoStack(prev => [currentResult, ...prev].slice(0, 20));
+    }
+    setRedoStack([]);
+    setCurrentResult(result);
+  }, [currentResult]);
+
+  const undo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    const prev = undoStack[0];
+    setRedoStack(r => [currentResult, ...r]);
+    setCurrentResult(prev);
+    setUndoStack(u => u.slice(1));
+  }, [currentResult, undoStack]);
+
+  const redo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[0];
+    setUndoStack(u => [currentResult, ...u]);
+    setCurrentResult(next);
+    setRedoStack(r => r.slice(1));
+  }, [currentResult, redoStack]);
+
   const [deployConfig, setDeployConfig] = useState(() => {
     const saved = localStorage.getItem("mc_global_config");
     return saved ? JSON.parse(saved) : {
@@ -154,7 +183,6 @@ export default function MapGenerator() {
     window.addEventListener("mc_config_updated", syncConfig);
     return () => window.removeEventListener("mc_config_updated", syncConfig);
   }, []);
-  const [currentResult, setCurrentResult] = useState("");
 
   // Persistence - State Recovery Logic
   React.useEffect(() => {
@@ -430,6 +458,33 @@ export default function MapGenerator() {
              {VERSIONS.map(v => <option key={v} value={v} className="bg-neutral-950">{v}</option>)}
            </select>
          </div>
+
+         {currentResult && (
+           <div className="ml-auto flex items-center gap-2 bg-neutral-900 px-2 py-1.5 rounded-lg border border-neutral-800">
+              <button 
+                onClick={undo} disabled={undoStack.length === 0} 
+                className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors"
+                title="Undo Generation"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </button>
+              <button 
+                onClick={redo} disabled={redoStack.length === 0} 
+                className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors"
+                title="Redo Generation"
+              >
+                <RotateCw className="w-3 h-3" />
+              </button>
+              <div className="w-px h-3 bg-neutral-800 mx-1" />
+              <button 
+                onClick={() => copyToClipboard(currentResult)}
+                className="p-1 text-emerald-500 hover:text-emerald-400 transition-colors"
+                title="Copy Commands"
+              >
+                <Send className="w-3 h-3" />
+              </button>
+           </div>
+         )}
       </div>
 
       {/* Advanced Generation Controls */}
@@ -629,9 +684,11 @@ export default function MapGenerator() {
       ]}
       endpointType="generate-map"
       onGenerate={generateMap}
+      onGenerateComplete={onGenerateComplete}
       onSaveCloud={handleSaveCloud}
       supportsEditing={true}
       extraControls={extraControls}
+      parameters={{ engine, version, complexity, density, verticality, activePreset }}
       renderOutput={renderOutput}
     />
   );

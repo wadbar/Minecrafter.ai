@@ -148,6 +148,13 @@ const EditSchema = z.object({
   targetLanguage: z.string().default("pt-BR"),
 });
 
+const GuideSchema = z.object({
+  context: z.string(),
+  prompt: z.string().optional(),
+  parameters: z.any().optional(),
+  targetLanguage: z.string().default("pt-BR"),
+});
+
 /**
  * @swagger
  * /api/generate-mod:
@@ -358,6 +365,32 @@ app.get("/api/handshake", (req, res) => {
     timestamp: Date.now(),
     isolation: "SECURE_VM"
   });
+});
+
+app.post("/api/ai-guide", validateBody(GuideSchema), async (req, res) => {
+  try {
+    const { context, prompt, parameters, targetLanguage } = req.body;
+    const systemPrompt = `# ROLE: SENIOR AI INSTRUCTOR & MINECRAFT EXPERT
+Task: Provide a structured, adaptive tutorial guide for the current generator context.
+Context: ${context}
+User Input: "${prompt || "None"}"
+Parameters: ${JSON.stringify(parameters || {})}
+
+GUIDELINES:
+1. Explain how the current parameters affect the result in this specific context.
+2. Provide 3 high-impact tips to improve the current prompt/config for "${targetLanguage}".
+3. Structure the output in Markdown with clean headers.
+4. Keep it concise, professional, and encouraging.
+5. Use "Minecraft Professional" terminology.
+
+Return ONLY the markdown guide.`;
+
+    const result = await fastAiService.generate(systemPrompt);
+    res.json({ result, traceId: (req as any).traceId });
+  } catch (err: any) {
+    logger.error("AI_GUIDE_FAILURE", err);
+    res.status(500).json({ error: "Failed to generate AI guidance.", traceId: (req as any).traceId });
+  }
 });
 
 // ==========================================

@@ -8,6 +8,7 @@ import { useAIGenerator } from "../lib/useAIGenerator";
 import VoiceCommandOverlay from "./VoiceCommandOverlay";
 import GeneratorOutput from "./GeneratorOutput";
 import EditorPanel from "./EditorPanel";
+import AIGuide from "./AIGuide";
 
 interface GeneratorLayoutProps {
   title: string;
@@ -21,6 +22,7 @@ interface GeneratorLayoutProps {
   supportsEditing?: boolean;
   extraControls?: React.ReactNode;
   onVoiceCommand?: (transcript: string) => boolean;
+  parameters?: any;
 }
 
 export default React.memo(function GeneratorLayout({
@@ -36,6 +38,7 @@ export default React.memo(function GeneratorLayout({
   extraControls,
   promptTemplates,
   onVoiceCommand,
+  parameters: moduleParams,
 }: GeneratorLayoutProps & { promptTemplates?: { label: string, prompt: string, description?: string }[] }) {
   const [prompt, setPrompt] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -372,6 +375,7 @@ export default React.memo(function GeneratorLayout({
           </div>
         </div>
         <div className="flex items-center gap-4 bg-neutral-950 p-2 rounded-[2rem] border border-neutral-900 shadow-2xl">
+          <AIGuide context={title} prompt={prompt} parameters={{ mode, targetLanguage, ...moduleParams }} />
           {supportsEditing && (
             <div className="flex bg-neutral-950 border border-neutral-800 rounded-lg p-1 shadow-inner">
               <button

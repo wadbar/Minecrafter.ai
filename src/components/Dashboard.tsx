@@ -1,8 +1,9 @@
 import React, { memo } from "react";
 import { ViewState } from "../App";
-import { Brain, Sparkles, Map, FileCode2, Paintbrush, Users, Store, Shirt, Database, Activity, Cpu, Zap, Server, Terminal, BarChart3, Box } from "lucide-react";
+import { Brain, Sparkles, Map, FileCode2, Paintbrush, Users, Store, Shirt, Database, Activity, Cpu, Zap, Server, Terminal, BarChart3, Box, Clock, ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { getArtifacts } from "../lib/db";
 
 interface Props {
   setCurrentView: (v: ViewState) => void;
@@ -12,6 +13,7 @@ export default function Dashboard({ setCurrentView }: Props) {
   const [sessionGens, setSessionGens] = React.useState(0);
   const [uptime, setUptime] = React.useState(0);
   const [userStats, setUserStats] = React.useState<any>(null);
+  const [recentArtifacts, setRecentArtifacts] = React.useState<any[]>([]);
   
   const [chartData, setChartData] = React.useState<any[]>([]);
 
@@ -58,6 +60,14 @@ export default function Dashboard({ setCurrentView }: Props) {
       } catch (e) {}
     };
     fetchStats();
+
+    const fetchRecentArtifacts = async () => {
+      try {
+        const artifacts = await getArtifacts();
+        if (active) setRecentArtifacts(artifacts.slice(0, 4));
+      } catch (e) {}
+    };
+    fetchRecentArtifacts();
     
     const logInterval = setInterval(() => {
       if (!active) return;
@@ -277,43 +287,95 @@ export default function Dashboard({ setCurrentView }: Props) {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.6 }}
-          className="lg:col-span-2 p-8 rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-800 border border-neutral-700 relative overflow-hidden"
+          className="lg:col-span-2 space-y-6"
         >
-          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-emerald-500/10 blur-3xl rounded-full" />
-          <h2 className="text-2xl font-semibold text-white mb-6 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-emerald-400" />
-            Core Objectives & Intelligence
-          </h2>
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-6 text-neutral-300">
-            <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
-              <span className="text-emerald-500 font-bold">01</span>
-              <div>
-                <p className="font-bold text-white text-sm uppercase tracking-tighter">Script Automation Core</p>
-                <p className="text-[10px] text-neutral-500 mt-1">Geração de bots Mineflayer com suporte a pathfinding avançado e coleta de recursos.</p>
-              </div>
-            </li>
-            <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
-              <span className="text-emerald-500 font-bold">02</span>
-              <div>
-                <p className="font-bold text-white text-sm uppercase tracking-tighter">Environment Integration</p>
-                <p className="text-[10px] text-neutral-500 mt-1">Auditagem de runtime e otimização de I/O em ambientes baseados em Debian/Ubuntu.</p>
-              </div>
-            </li>
-            <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
-              <span className="text-emerald-500 font-bold">03</span>
-              <div>
-                <p className="font-bold text-white text-sm uppercase tracking-tighter">Procedural Meshing</p>
-                <p className="text-[10px] text-neutral-500 mt-1">Arquitetura de mapas em mega-escala com distorção de ruído Perlin de baixa latência.</p>
-              </div>
-            </li>
-            <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
-              <span className="text-emerald-500 font-bold">04</span>
-              <div>
-                <p className="font-bold text-white text-sm uppercase tracking-tighter">Security Audit Control</p>
-                <p className="text-[10px] text-neutral-500 mt-1">Monitoramento de estresse concurrente e prevenção de race conditions em scripts automatizados.</p>
-              </div>
-            </li>
-          </ul>
+          <div className="p-8 rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-800 border border-neutral-700 relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-emerald-500/10 blur-3xl rounded-full" />
+            <h2 className="text-2xl font-semibold text-white mb-6 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-emerald-400" />
+              Core Objectives & Intelligence
+            </h2>
+            <ul className="grid grid-cols-1 md:grid-cols-2 gap-6 text-neutral-300">
+              <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
+                <span className="text-emerald-500 font-bold">01</span>
+                <div>
+                  <p className="font-bold text-white text-sm uppercase tracking-tighter">Script Automation Core</p>
+                  <p className="text-[10px] text-neutral-500 mt-1">Geração de bots Mineflayer com suporte a pathfinding avançado e coleta de recursos.</p>
+                </div>
+              </li>
+              <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
+                <span className="text-emerald-500 font-bold">02</span>
+                <div>
+                  <p className="font-bold text-white text-sm uppercase tracking-tighter">Environment Integration</p>
+                  <p className="text-[10px] text-neutral-500 mt-1">Auditagem de runtime e otimização de I/O em ambientes baseados em Debian/Ubuntu.</p>
+                </div>
+              </li>
+              <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
+                <span className="text-emerald-500 font-bold">03</span>
+                <div>
+                  <p className="font-bold text-white text-sm uppercase tracking-tighter">Procedural Meshing</p>
+                  <p className="text-[10px] text-neutral-500 mt-1">Arquitetura de mapas em mega-escala com distorção de ruído Perlin de baixa latência.</p>
+                </div>
+              </li>
+              <li className="flex items-start gap-3 bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
+                <span className="text-emerald-500 font-bold">04</span>
+                <div>
+                  <p className="font-bold text-white text-sm uppercase tracking-tighter">Security Audit Control</p>
+                  <p className="text-[10px] text-neutral-500 mt-1">Monitoramento de estresse concurrente e prevenção de race conditions em scripts automatizados.</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <div className="p-8 rounded-3xl bg-neutral-900/50 border border-neutral-800">
+             <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                   <Clock className="w-5 h-5 text-sky-500" />
+                   Atividade Recente no Vault
+                </h3>
+                <button 
+                  onClick={() => setCurrentView("vault")}
+                  className="text-[10px] font-black uppercase tracking-widest text-neutral-500 hover:text-white transition-colors"
+                >
+                  Ver Tudo ↗
+                </button>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {recentArtifacts.length > 0 ? (
+                   recentArtifacts.map((art) => (
+                      <button 
+                        key={art.id}
+                        onClick={() => setCurrentView("vault")}
+                        className="flex items-center gap-4 p-4 rounded-2xl bg-black/40 border border-neutral-800 hover:border-neutral-600 transition-all text-left"
+                      >
+                         <div className={cn(
+                            "p-2 rounded-xl shrink-0",
+                            art.type === 'mod' ? 'bg-sky-500/10 text-sky-500' :
+                            art.type === 'map' ? 'bg-emerald-500/10 text-emerald-500' :
+                            art.type === 'texture' ? 'bg-amber-500/10 text-amber-500' :
+                            'bg-neutral-800 text-neutral-400'
+                         )}>
+                            {art.type === 'mod' && <Box className="w-4 h-4" />}
+                            {art.type === 'map' && <Map className="w-4 h-4" />}
+                            {art.type === 'texture' && <Paintbrush className="w-4 h-4" />}
+                            {art.type === 'script' && <Terminal className="w-4 h-4" />}
+                            {art.type === 'voxel' && <Grid3X3 className="w-4 h-4" />}
+                         </div>
+                         <div className="flex-1 min-w-0">
+                            <div className="text-xs font-bold text-white truncate">{art.title}</div>
+                            <div className="text-[10px] text-neutral-600 mt-0.5">{new Date(art.timestamp).toLocaleDateString()}</div>
+                         </div>
+                         <ChevronRight className="w-4 h-4 text-neutral-800" />
+                      </button>
+                   ))
+                ) : (
+                   <div className="col-span-2 py-8 text-center bg-black/20 rounded-2xl border border-dashed border-neutral-800">
+                      <p className="text-[10px] font-mono text-neutral-600 uppercase tracking-widest">Nenhum artefato recente detectado no Vault.</p>
+                   </div>
+                )}
+             </div>
+          </div>
         </motion.div>
 
         <motion.div
