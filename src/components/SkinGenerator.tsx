@@ -6,7 +6,7 @@ import SkinViewer3D from "./SkinViewer3D";
 import { saveAs } from "file-saver";
 import { toast } from "sonner";
 import { saveArtifact } from "../lib/db";
-import { cn } from "../lib/utils";
+import { cn, sleep, withExponentialBackoff } from "../lib/utils";
 import { useAuth } from "../lib/firebase";
 
 interface SkinHistoryItem {
@@ -29,18 +29,19 @@ interface SkinHistoryItem {
 export default function SkinGenerator() {
   const { user } = useAuth();
   const [modelType, setModelType] = useState<"classic" | "slim">("classic");
+  const [compilationMode, setCompilationMode] = useState<"rapido" | "otimizado" | "debug">("otimizado");
   const [palette, setPalette] = useState("Default");
   const [customColor, setCustomColor] = useState("#555555");
   const [useCape, setUseCape] = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
   const [showDocs, setShowDocs] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [detailLevel, setDetailLevel] = useState(50);
-  const [colorIntensity, setColorIntensity] = useState(50);
+  const [showAdvanced, setShowAdvanced] = useState(true);
+  const [detailLevel, setDetailLevel] = useState(60);
+  const [colorIntensity, setColorIntensity] = useState(60);
   const [stylization, setStylization] = useState(50);
   const [contrast, setContrast] = useState(50);
   const [patternScale, setPatternScale] = useState(50);
-  const [ditherLevel, setDitherLevel] = useState(0);
+  const [ditherLevel, setDitherLevel] = useState(20);
   const [currentSkinUrl, setCurrentSkinUrl] = useState<string | null>("https://textures.minecraft.net/texture/31cf464973347fd5fd7546654e95f082e6ef920c812d348003f90b8ff4f0ed83"); // Steve default texture
   const [history, setHistory] = useState<SkinHistoryItem[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -138,21 +139,23 @@ export default function SkinGenerator() {
         const img = new Image();
         img.crossOrigin = "anonymous";
         
-        await new Promise((resolve, reject) => {
-          img.onload = () => {
-            if (!active) return resolve(false);
-            if (type === 'skin') {
-               const validDimensions = (img.width === 64 && (img.height === 64 || img.height === 32));
-               if (!validDimensions) {
-                 console.warn(`Asset rejected: Skin dimensions are ${img.width}x${img.height}, expected 64x64 or 64x32.`);
-               }
-            }
-            resolve(true);
-          };
-          img.onerror = () => reject(new Error("Image inaccessible"));
-          img.src = url;
-          setTimeout(() => reject(new Error("Timeout")), 5000);
-        });
+        await Promise.race([
+          new Promise((resolve, reject) => {
+            img.onload = () => {
+              if (!active) return resolve(false);
+              if (type === 'skin') {
+                 const validDimensions = (img.width === 64 && (img.height === 64 || img.height === 32));
+                 if (!validDimensions) {
+                   console.warn(`Asset rejected: Skin dimensions are ${img.width}x${img.height}, expected 64x64 or 64x32.`);
+                 }
+              }
+              resolve(true);
+            };
+            img.onerror = () => reject(new Error("Image inaccessible"));
+            img.src = url;
+          }),
+          sleep(5000).then(() => Promise.reject(new Error("Timeout")))
+        ]);
         
         if (active) setError(false);
       } catch (e) {
@@ -160,14 +163,17 @@ export default function SkinGenerator() {
       }
     };
 
-    const timer = setTimeout(() => {
-      validate(externalSkinUrl, 'skin', setSkinInputError);
-      validate(externalCapeUrl, 'cape', setCapeInputError);
-    }, 800);
+    let validationTimer: any = null;
+    const triggerValidation = async () => {
+       await sleep(800);
+       if (!active) return;
+       validate(externalSkinUrl, 'skin', setSkinInputError);
+       validate(externalCapeUrl, 'cape', setCapeInputError);
+    };
+    triggerValidation();
 
     return () => {
       active = false;
-      clearTimeout(timer);
     };
   }, [externalSkinUrl, externalCapeUrl]);
 
@@ -179,6 +185,7 @@ export default function SkinGenerator() {
         const parsed = JSON.parse(saved);
         if (parsed.modelType) setModelType(parsed.modelType);
         if (parsed.detailLevel) setDetailLevel(parsed.detailLevel);
+        if (parsed.compilationMode) setCompilationMode(parsed.compilationMode);
         if (parsed.history) setHistory(parsed.history);
       } catch (e) {
         console.warn("Restore failed:", e);
@@ -190,9 +197,10 @@ export default function SkinGenerator() {
     localStorage.setItem("skin_forge_state", JSON.stringify({
       modelType,
       detailLevel,
+      compilationMode,
       history
     }));
-  }, [modelType, detailLevel, history]);
+  }, [modelType, detailLevel, compilationMode, history]);
 
   const generateSkin = async (prompt: string, _existingData?: string, _targetLanguage?: string) => {
     return await executeGeneration(prompt);
@@ -216,7 +224,7 @@ export default function SkinGenerator() {
     try {
       setIsProcessing(true);
       setTelemetryLogs([]);
-      addLog("Initializing Generation Pipeline...", "info");
+      addLog(`Initializing Generation Pipeline (Mode: ${compilationMode.toUpperCase()})...`, "info");
       
       setLastBasePrompt(activePrompt);
       
@@ -264,7 +272,7 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
 
       if (!navigator.onLine) {
         addLog("Network connection lost. Activating Standalone Engine.", "warn");
-        addLog("Simulating mapping via Procedural Core.", "info");
+        addLog("Executing mapping via Procedural Core.", "info");
         
         const result = OfflineEngine.generateSkin(enhancedPrompt, { 
           detailLevel: config.detailLevel, 
@@ -283,25 +291,46 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
 
       addLog("Transmitting request to Remote Cluster...", "info");
       
-      const res = await fetch("/api/generate-skin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: enhancedPrompt, modelType: config.modelType }),
-        signal: abortController.signal
-      });
-      
-      if (!res.ok) {
-        const errorMessages: Record<number, string> = {
-          400: "Parâmetros de geração inválidos.",
-          429: "Limite de requisições excedido. Aguarde um momento.",
-          500: "Erro interno no servidor.",
-          503: "O motor de geração está sobrecarregado."
-        };
-        throw new Error(errorMessages[res.status] || `Falha de comunicação (Status: ${res.status})`);
+      let res;
+      let data;
+      try {
+        res = await withExponentialBackoff(async () => {
+          const response = await fetch("/api/generate-skin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: enhancedPrompt, modelType: config.modelType }),
+            signal: abortController.signal
+          });
+          if (!response.ok) {
+            const errorMessages: Record<number, string> = {
+              400: "Parâmetros de geração inválidos.",
+              429: "Limite de requisições excedido. Aguarde um momento.",
+              500: "Erro interno no servidor.",
+              503: "O motor de geração está sobrecarregado."
+            };
+            throw new Error(errorMessages[response.status] || `Falha de comunicação (Status: ${response.status})`);
+          }
+          return response;
+        }, 3, 2000);
+        data = await res.json();
+        if (data.error) throw new Error(data.error);
+      } catch(e: any) {
+        addLog(`Remote generation unavailable (${e.message}). Triggering Offline Procedural Engine.`, "warn");
+        const result = OfflineEngine.generateSkin(enhancedPrompt, { 
+          detailLevel: config.detailLevel, 
+          colorIntensity: config.colorIntensity,
+          contrast: config.contrast,
+          ditherLevel: config.ditherLevel,
+          stylization: config.stylization,
+          patternScale: config.patternScale
+        });
+        
+        setCurrentSkinUrl(result);
+        updateHistory(result);
+        addLog("Skin synthesized locally via fallback.", "success");
+        setIsProcessing(false);
+        return result;
       }
-      
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
       
       addLog("Assets received. Finalizing mapping.", "info");
       setCurrentSkinUrl(data.result);
@@ -477,6 +506,67 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
            >
              {autoRotate ? "ACTIVE" : "PAUSED"}
            </button>
+         </div>
+
+         <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800">
+           <Sliders className="w-3.5 h-3.5 text-amber-500" />
+           <span className="font-bold uppercase tracking-widest text-neutral-500">Compile Mode</span>
+           <div className="flex gap-1 ml-2">
+             <button 
+               onClick={() => {
+                 setCompilationMode("rapido");
+                 setDetailLevel(30);
+                 setColorIntensity(50);
+                 setStylization(30);
+                 setContrast(40);
+                 setPatternScale(70);
+                 setDitherLevel(0);
+                 toast.success("Modo Rápido", { description: "Geração focada em velocidade. Detalhes reduzidos."});
+               }}
+               className={cn(
+                 "px-2 py-1 rounded transition-all text-[9px] font-black border",
+                 compilationMode === "rapido" ? "bg-amber-500/20 text-amber-500 border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.2)]" : "bg-neutral-800/50 border-neutral-800 text-neutral-500 hover:text-white"
+               )}
+             >
+               FAST
+             </button>
+             <button 
+               onClick={() => {
+                 setCompilationMode("otimizado");
+                 setDetailLevel(60);
+                 setColorIntensity(60);
+                 setStylization(50);
+                 setContrast(50);
+                 setPatternScale(50);
+                 setDitherLevel(20);
+                 toast.success("Modo Otimizado", { description: "Equilíbrio entre qualidade e performance."});
+               }}
+               className={cn(
+                 "px-2 py-1 rounded transition-all text-[9px] font-black border",
+                 compilationMode === "otimizado" ? "bg-amber-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]" : "bg-neutral-800/50 border-neutral-800 text-neutral-500 hover:text-white"
+               )}
+             >
+               OPTIMIZED
+             </button>
+             <button 
+               onClick={() => {
+                 setCompilationMode("debug");
+                 setDetailLevel(100);
+                 setColorIntensity(100);
+                 setStylization(80);
+                 setContrast(80);
+                 setPatternScale(100);
+                 setDitherLevel(50);
+                 toast.success("Modo Debug", { description: "Detalhamento máximo habilitado. Maior custo computacional."});
+               }}
+               className={cn(
+                 "px-2 py-1 rounded transition-all text-[9px] font-black border",
+                 compilationMode === "debug" ? "bg-rose-500/20 text-rose-400 border-rose-500/30 shadow-[0_0_8px_rgba(244,63,94,0.2)]" : "bg-neutral-800/50 border-neutral-800 text-neutral-500 hover:text-white"
+               )}
+             >
+               DEBUG
+             </button>
+           </div>
          </div>
 
          {/* Documentation Toggle */}
@@ -850,7 +940,7 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
         </div>
       )}
     </div>
-  ), [modelType, autoRotate, useCape, showDocs, showAdvanced, detailLevel, colorIntensity, stylization, contrast, patternScale, ditherLevel, externalSkinUrl, externalCapeUrl]);
+  ), [modelType, compilationMode, autoRotate, useCape, showDocs, showAdvanced, detailLevel, colorIntensity, stylization, contrast, patternScale, ditherLevel, externalSkinUrl, externalCapeUrl]);
 
   const handleRegenerate = (item: SkinHistoryItem) => {
     toast.promise(executeGeneration(item.params.prompt, item.params), {

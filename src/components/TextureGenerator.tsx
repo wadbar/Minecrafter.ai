@@ -44,14 +44,21 @@ export default function TextureGenerator() {
   const [currentImage, setCurrentImage] = useState("");
 
   const generateTexture = useCallback(async (prompt: string) => {
-    const res = await fetch("/api/generate-texture", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, width, height, aspectRatio }),
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    return data.result || "";
+    try {
+      const res = await fetch("/api/generate-texture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, width, height, aspectRatio }),
+      });
+      if (!res.ok) throw new Error("API Failure");
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data.result || "";
+    } catch (e) {
+      toast.info("Processamento Local Ativado", { description: "Gerando textura procedural offline." });
+      const { OfflineEngine } = await import("../services/OfflineEngine");
+      return OfflineEngine.generateTexture(prompt);
+    }
   }, [width, height, aspectRatio]);
 
   const onGenerateComplete = useCallback((result: string) => {

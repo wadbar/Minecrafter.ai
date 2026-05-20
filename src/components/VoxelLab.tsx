@@ -140,17 +140,25 @@ export default function VoxelLab() {
     FrontLogger.info("VOXEL_KERNEL_INVOKED", { prompt });
 
     try {
-      const response = await fetch("/api/generate-voxel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
-      
-      if (!response.ok) throw new Error(`Gateway Error: ${response.status}`);
-      
-      const result = await response.json();
-      if (result.error) throw new Error(result.error);
-      
+      let result;
+      try {
+        const response = await fetch("/api/generate-voxel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt }),
+        });
+        
+        if (!response.ok) throw new Error(`Gateway Error: ${response.status}`);
+        
+        result = await response.json();
+        if (result.error) throw new Error(result.error);
+      } catch (e: any) {
+        FrontLogger.warn("Voxel API Failure, falling back to Offline Engine", { error: e.message });
+        toast.info("Processamento Local Ativado", { description: "Gerando voxel procedural offline." });
+        const { OfflineEngine } = await import("../services/OfflineEngine");
+        result = OfflineEngine.generateVoxel(prompt);
+      }
+        
       const newData: VoxelData = {
         ...result,
         stats: {
@@ -158,7 +166,7 @@ export default function VoxelLab() {
           generationTime: Date.now() - startTime
         }
       };
-      
+        
       setData(newData);
       setHistory(prev => [newData, ...prev].slice(0, 10));
       

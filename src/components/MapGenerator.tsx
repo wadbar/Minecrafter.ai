@@ -300,44 +300,45 @@ export default function MapGenerator() {
        setIsProcessing(true);
        setCacheStats(prev => ({ ...prev, status: "Generating New Chunks..." }));
 
-       if (!navigator.onLine) {
-          toast.info("Processamento Local Ativado", { description: "Gerando estrutura procedural baseada em templates offline." });
-          const result = OfflineEngine.generateMap(prompt, activePreset, { complexity, density, verticality });
-          if (!isEditMode) {
-            chunkCache.current.set(cacheKey, result);
-            setCacheStats(prev => ({ 
-              ...prev, 
-              status: "Offline Result Optimized", 
-              size: chunkCache.current.size,
-              history: [...prev.history, false].slice(-20)
-            }));
-          }
-          setIsProcessing(false);
-          setCurrentResult(result);
-          return result;
-       }
-
        const body = isEditMode 
          ? { prompt: contextPrompt, existingData, targetLanguage }
          : { prompt: contextPrompt };
 
-       const res = await fetch(endpoint, {
-         method: "POST",
-         headers: { "Content-Type": "application/json" },
-         body: JSON.stringify(body),
-       });
+       let res;
+       try {
+         res = await fetch(endpoint, {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify(body),
+         });
 
-       if (!res.ok) {
-         let errorMessage = `Nexus Error: ${res.status}`;
-         try {
-           const errorData = await res.json();
-           if (errorData.error) errorMessage = errorData.error;
-         } catch {
-           if (res.status === 400) errorMessage = "Prompt rejection: The matrix cannot process this request structure.";
-           if (res.status === 429) errorMessage = "Neural link saturated: Too many requests. Wait for cooldown.";
-           if (res.status >= 500) errorMessage = "Core system failure: Server-side architecture is unstable.";
+         if (!res.ok) {
+           let errorMessage = `Nexus Error: ${res.status}`;
+           try {
+             const errorData = await res.json();
+             if (errorData.error) errorMessage = errorData.error;
+           } catch {
+             if (res.status === 400) errorMessage = "Prompt rejection: The matrix cannot process this request structure.";
+             if (res.status === 429) errorMessage = "Neural link saturated: Too many requests. Wait for cooldown.";
+             if (res.status >= 500) errorMessage = "Core system failure: Server-side architecture is unstable.";
+           }
+           throw new Error(errorMessage);
          }
-         throw new Error(errorMessage);
+       } catch (fetchErr: any) {
+         toast.info("Processamento Local Ativado", { description: "Gerando estrutura procedural baseada em templates offline." });
+         const result = OfflineEngine.generateMap(prompt, activePreset, { complexity, density, verticality });
+         if (!isEditMode) {
+           chunkCache.current.set(cacheKey, result);
+           setCacheStats(prev => ({ 
+             ...prev, 
+             status: "Offline Result Optimized", 
+             size: chunkCache.current.size,
+             history: [...prev.history, false].slice(-20)
+           }));
+         }
+         setIsProcessing(false);
+         setCurrentResult(result);
+         return result;
        }
 
        const data = await res.json();

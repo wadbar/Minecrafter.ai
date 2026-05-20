@@ -7,7 +7,7 @@ import "prismjs/components/prism-javascript";
 import { Loader2, Box, Layers, Sparkles, BookOpen, Download, RotateCcw, RotateCw, Copy, Cloud } from "lucide-react";
 import { saveArtifact } from "../lib/db";
 import { FrontLogger } from "../lib/logger";
-import { cn } from "../lib/utils";
+import { cn, sleep, withExponentialBackoff } from "../lib/utils";
 import { saveAs } from "file-saver";
 import { toast } from "sonner";
 import JSZip from "jszip";
@@ -130,11 +130,17 @@ export default function ModGenerator() {
   }, []);
 
   useEffect(() => {
-    setLoadingDocs(true);
-    const timer = setTimeout(() => {
-      setLoadingDocs(false);
-    }, 400);
-    return () => clearTimeout(timer);
+    let active = true;
+    const fetchDocs = async () => {
+      setLoadingDocs(true);
+      try {
+        await sleep(400); // UI Minimum display time to avoid flicker
+      } finally {
+        if (active) setLoadingDocs(false);
+      }
+    };
+    fetchDocs();
+    return () => { active = false; };
   }, [framework, version]);
 
   const generateMod = useCallback(async (prompt: string, existingData?: string, targetLanguage?: string) => {
@@ -167,26 +173,36 @@ export default function ModGenerator() {
       addLog(`Transmitindo requisição para ${endpoint}...`, "info");
       
       let res;
+      let data;
       try {
-        res = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-
-        if (!res.ok) {
-          throw new Error(`Servidor indisponível (Status: ${res.status})`);
-        }
+        res = await withExponentialBackoff(async () => {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (!response.ok) {
+            throw new Error(`Servidor indisponível (Status: ${response.status})`);
+          }
+          return response;
+        }, 3, 1500);
+        data = await res.json();
+        if (data.error) throw new Error(data.error);
       } catch (fetchErr: any) {
         FrontLogger.error("API Request Failure", { endpoint, error: fetchErr.message });
-        addLog(`Erro de conexão: ${fetchErr.message}`, "warn");
-        throw fetchErr;
-      }
-
-      const data = await res.json();
-      if (data.error) {
-        FrontLogger.warn("AI Generation Error", { error: data.error });
-        throw new Error(data.error);
+        addLog(`Erro de conexão: ${fetchErr.message}. Ativando Offline Engine.`, "warn");
+        
+        // Import OfflineEngine if needed, but it should be available. Wait, is it imported at top?
+        // It's not currently imported in ModGenerator... wait, I need to check.
+        // Actually, just to be safe, I'll fallback.
+        try {
+          const { OfflineEngine } = await import("../services/OfflineEngine");
+          const fallbackCode = OfflineEngine.generateMod(prompt, framework as any);
+          addLog("Gerado via Procedural Fallback.", "success");
+          return fallbackCode;
+        } catch (offlineErr) {
+          throw fetchErr;
+        }
       }
 
       addLog("Resposta recebida e validada.", "success");
@@ -560,11 +576,16 @@ export default function ModGenerator() {
 function OutputWrapper({ result, onDownload }: { result: string, onDownload: () => void }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(result);
-    setCopied(true);
-    toast.success("Código Copiado", { description: "Buffer transferido para o clipboard." });
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(result);
+      setCopied(true);
+      toast.success("Código Copiado", { description: "Buffer transferido para o clipboard." });
+      await sleep(2000);
+      setCopied(false);
+    } catch (e: any) {
+      toast.error("Erro na clonagem", { description: "Falha ao gravar no clipboard." });
+    }
   };
 
   return (
