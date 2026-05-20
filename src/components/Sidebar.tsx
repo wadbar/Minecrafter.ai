@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { cn } from "../lib/utils";
 import { ViewState } from "../App";
+import { useTranslation } from "../context/LanguageContext";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Brain,
@@ -33,17 +34,19 @@ export default function Sidebar({
   currentView,
   setCurrentView,
 }: SidebarProps) {
+  const { t } = useTranslation();
+  
   const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: Brain },
-    { id: "map", label: "Map & Terrain", icon: Map },
-    { id: "mod", label: "Mods & Plugins", icon: FileCode2 },
-    { id: "voxellab", label: "Laboratório Voxel", icon: Box },
-    { id: "scripthub", label: "Script Factory", icon: Terminal },
-    { id: "texture", label: "Textures & Items", icon: Paintbrush },
-    { id: "skin", label: "Skin Forge 3D", icon: Shirt },
-    { id: "storyteller", label: "Storyteller & NPCs", icon: Users },
-    { id: "vault", label: "Cloud Vault (Beta)", icon: Database },
-    { id: "integrations", label: "Export & Bedrock Store", icon: Store },
+    { id: "dashboard", label: t.views.dashboard, icon: Brain },
+    { id: "map", label: t.views.map, icon: Map },
+    { id: "mod", label: t.views.mod, icon: FileCode2 },
+    { id: "voxellab", label: t.views.voxellab, icon: Box },
+    { id: "scripthub", label: t.views.scripthub, icon: Terminal },
+    { id: "texture", label: t.views.texture, icon: Paintbrush },
+    { id: "skin", label: t.views.skin, icon: Shirt },
+    { id: "storyteller", label: t.views.storyteller, icon: Users },
+    { id: "vault", label: t.views.vault, icon: Database },
+    { id: "integrations", label: t.views.integrations, icon: Store },
   ] as const;
 
   const [hoveredItem, setHoveredItem] = React.useState<string | null>(null);
@@ -223,7 +226,7 @@ export default function Sidebar({
               "w-5 h-5 flex-shrink-0 transition-transform duration-500",
               currentView === "settings" ? "rotate-90" : "group-hover:rotate-45"
             )} />
-            {isOpen && <span className="ml-4">Ajustes</span>}
+            {isOpen && <span className="ml-4">{t.common.settings}</span>}
           </motion.button>
 
           {/* Desktop Toggle Button */}

@@ -214,7 +214,7 @@ const TextureSchema = z.object({
 });
 
 app.post("/api/generate-texture", validateBody(TextureSchema), async (req, res) => {
-  const { prompt, width, height, aspectRatio } = req.body;
+  const { prompt, width, height, aspectRatio, baseImage } = req.body;
   let finalAspectRatio = aspectRatio || "1:1";
   
   if (!aspectRatio && width && height) {
@@ -226,7 +226,8 @@ app.post("/api/generate-texture", validateBody(TextureSchema), async (req, res) 
     else finalAspectRatio = "9:16";
   }
 
-  const result = await fastAiService.generateImage(`Minecraft ${width || 16}x${height || 16} pixel art texture of ${prompt}. Very blocky, pixelated, raw game asset style. No background.`, finalAspectRatio);
+  const basePromptPrefix = baseImage ? "Modify this base texture and add AI details: " : "";
+  const result = await fastAiService.generateImage(`${basePromptPrefix}Minecraft ${width || 16}x${height || 16} pixel art texture of ${prompt}. Very blocky, pixelated, raw game asset style. No background.`, finalAspectRatio);
   res.json({ result, traceId: (req as any).traceId });
 });
 

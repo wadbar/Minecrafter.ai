@@ -15,8 +15,9 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import SystemStatus from "./components/SystemStatus";
 import { AuthProvider } from "./lib/firebase";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
+import { LanguageProvider, useTranslation } from "./context/LanguageContext";
 import { cn } from "./lib/utils";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, Languages } from "lucide-react";
 
 // Lazy loading heavy generator components for performance optimization
 const MapGenerator = lazy(() => import("./components/MapGenerator"));
@@ -38,6 +39,7 @@ function AppContent() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [telemetry, setTelemetry] = useState({ cpu: 42, load: 22 });
   const { theme, toggleTheme } = useTheme();
+  const { t, language, setLanguage } = useTranslation();
 
   useEffect(() => {
     // Initial state based on screen size
@@ -125,7 +127,7 @@ function AppContent() {
   // Lazy loading fallback skeleton
   const LoadingFallback = () => (
     <div className="flex h-full w-full items-center justify-center text-m3-on-surface-variant font-mono text-sm animate-pulse">
-      [ CARREGANDO MÓDULO DE EXECUÇÃO... ]
+      {t.common.loadingModule}
     </div>
   );
 
@@ -146,10 +148,18 @@ function AppContent() {
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/40" />
           </div>
           <div className="h-4 w-px bg-m3-outline-variant" />
-          <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">Industrial Solutions Builder</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">{t.common.industrialSolutions}</span>
         </div>
         
         <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setLanguage(language === "en" ? "pt" : "en")}
+            className="flex items-center gap-2 p-1.5 px-3 rounded-full hover:bg-m3-surface-variant text-m3-on-surface-variant transition-colors group"
+            title={language === "en" ? "Translate to Portuguese" : "Traduzir para Inglês"}
+          >
+            <Languages className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+            <span className="text-[10px] font-bold uppercase">{language}</span>
+          </button>
           <button 
             onClick={toggleTheme}
             className="p-1.5 rounded-full hover:bg-m3-surface-variant text-m3-on-surface-variant transition-colors"
@@ -186,18 +196,18 @@ function AppContent() {
               </button>
               <div className="flex flex-col">
                 <span className="text-sm font-bold text-m3-on-surface capitalize tracking-wide">
-                  {currentView}
+                  {t.views[currentView]}
                 </span>
               </div>
             </div>
 
             <div className="hidden md:flex items-center gap-6 text-[10px] font-medium text-m3-on-surface-variant uppercase tracking-wider">
                <div className="flex flex-col items-end">
-                  <span className="opacity-60">Engine_CPU</span>
+                  <span className="opacity-60">{t.common.engineCpu}</span>
                   <span className="text-m3-primary font-bold">{telemetry.cpu}°C</span>
                </div>
                <div className="flex flex-col items-end">
-                  <span className="opacity-60">Runtime_Load</span>
+                  <span className="opacity-60">{t.common.runtimeLoad}</span>
                   <span className="text-m3-on-surface font-bold">{telemetry.load}%</span>
                </div>
             </div>
@@ -230,9 +240,11 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <ThemeProvider>
-        <AppContent />
-      </ThemeProvider>
+      <LanguageProvider>
+        <ThemeProvider>
+          <AppContent />
+        </ThemeProvider>
+      </LanguageProvider>
     </AuthProvider>
   );
 }

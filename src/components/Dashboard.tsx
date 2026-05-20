@@ -5,12 +5,14 @@ import { Brain, Sparkles, Map, FileCode2, Paintbrush, Users, Store, Shirt, Datab
 import { motion } from "motion/react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { getArtifacts } from "../lib/db";
+import { useTranslation } from "../context/LanguageContext";
 
 interface Props {
   setCurrentView: (v: ViewState) => void;
 }
 
 export default function Dashboard({ setCurrentView }: Props) {
+  const { t } = useTranslation();
   const [sessionGens, setSessionGens] = React.useState(0);
   const [uptime, setUptime] = React.useState(0);
   const [userStats, setUserStats] = React.useState<any>(null);
@@ -107,24 +109,24 @@ export default function Dashboard({ setCurrentView }: Props) {
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 relative z-10">
         <div className="space-y-3">
           <div className="flex items-center gap-2 mb-2">
-             <div className="px-3 py-1 bg-m3-primary-container text-m3-on-primary-container text-[10px] font-bold uppercase tracking-wider rounded-full">Operacional</div>
-             <div className="px-3 py-1 bg-m3-surface-variant text-m3-on-surface-variant text-[10px] font-bold uppercase tracking-wider rounded-full">v2.4.0-STABLE</div>
+             <div className="px-3 py-1 bg-m3-primary-container text-m3-on-primary-container text-[10px] font-bold uppercase tracking-wider rounded-full">{t.dashboard.operational}</div>
+             <div className="px-3 py-1 bg-m3-surface-variant text-m3-on-surface-variant text-[10px] font-bold uppercase tracking-wider rounded-full">{t.dashboard.stable}</div>
           </div>
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-m3-on-surface">
             Minecraft<span className="text-m3-primary">Builder</span>
           </h1>
           <p className="text-base text-m3-on-surface-variant max-w-xl font-medium leading-relaxed">
-            Suíte de Engenharia de Minecraft. Orquestre ativos de IA e ferramentas de automação em uma interface moderna e intuitiva.
+            {t.dashboard.description}
           </p>
         </div>
 
         <div className="flex gap-4">
           <div className="px-6 py-4 bg-m3-surface-variant/50 border border-m3-outline-variant rounded-3xl min-w-[160px]">
-             <div className="text-[11px] font-bold text-m3-on-surface-variant uppercase mb-1 opacity-70">Tempo_Ativo</div>
+             <div className="text-[11px] font-bold text-m3-on-surface-variant uppercase mb-1 opacity-70">{t.dashboard.activeTime}</div>
              <div className="text-2xl font-bold text-m3-on-surface">{(uptime / 60).toFixed(1)}m</div>
           </div>
           <div className="px-6 py-4 bg-m3-primary-container border border-m3-primary/10 rounded-3xl min-w-[160px]">
-             <div className="text-[11px] font-bold text-m3-on-primary-container uppercase mb-1 opacity-70">Gerações</div>
+             <div className="text-[11px] font-bold text-m3-on-primary-container uppercase mb-1 opacity-70">{t.dashboard.generations}</div>
              <div className="text-2xl font-bold text-m3-on-primary-container">{userStats?.totalArtifacts || sessionGens}</div>
           </div>
         </div>
@@ -141,7 +143,7 @@ export default function Dashboard({ setCurrentView }: Props) {
               <Zap className="w-5 h-5 text-m3-primary" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-m3-on-surface-variant uppercase tracking-wider opacity-70">Cálculo</p>
+              <p className="text-[11px] font-bold text-m3-on-surface-variant uppercase tracking-wider opacity-70">{t.dashboard.compute}</p>
               <p className="text-lg font-bold text-m3-on-surface">{userStats.computeUnits} U</p>
             </div>
           </div>
@@ -151,7 +153,7 @@ export default function Dashboard({ setCurrentView }: Props) {
               <Activity className="w-5 h-5 text-m3-secondary" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-m3-on-surface-variant uppercase tracking-wider opacity-70">Latência</p>
+              <p className="text-[11px] font-bold text-m3-on-surface-variant uppercase tracking-wider opacity-70">{t.dashboard.latency}</p>
               <p className="text-lg font-bold text-m3-on-surface">{userStats.latency}</p>
             </div>
           </div>
@@ -161,8 +163,8 @@ export default function Dashboard({ setCurrentView }: Props) {
               <BarChart3 className="w-5 h-5 text-m3-primary" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-m3-on-surface-variant uppercase tracking-wider opacity-70">Carga</p>
-              <p className="text-lg font-bold text-m3-on-surface">NOMINAL</p>
+              <p className="text-[11px] font-bold text-m3-on-surface-variant uppercase tracking-wider opacity-70">{t.dashboard.load}</p>
+              <p className="text-lg font-bold text-m3-on-surface">{t.dashboard.nominal}</p>
             </div>
           </div>
 
@@ -171,7 +173,7 @@ export default function Dashboard({ setCurrentView }: Props) {
               <Server className="w-5 h-5 text-m3-secondary" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-m3-on-surface-variant uppercase tracking-wider opacity-70">Nó</p>
+              <p className="text-[11px] font-bold text-m3-on-surface-variant uppercase tracking-wider opacity-70">{t.dashboard.node}</p>
               <p className="text-lg font-bold text-m3-on-surface">{userStats.node}</p>
             </div>
           </div>
@@ -180,36 +182,40 @@ export default function Dashboard({ setCurrentView }: Props) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 relative z-10">
         <DashboardCard
-          title="Mapas e Terrenos"
-          description="Geração de megastruturas e topografia via Command Chains."
+          title={t.dashboard.mapsTitle}
+          description={t.dashboard.mapsDesc}
           icon={Map}
           onClick={() => setCurrentView("map")}
           delay={0.1}
           color="primary"
+          accessLabel={t.dashboard.access}
         />
         <DashboardCard
-          title="Mods e Plugins"
-          description="Engenharia de código Java/TS com arquitetura Clean."
+          title={t.dashboard.modsTitle}
+          description={t.dashboard.modsDesc}
           icon={FileCode2}
           onClick={() => setCurrentView("mod")}
           delay={0.2}
           color="secondary"
+          accessLabel={t.dashboard.access}
         />
         <DashboardCard
-          title="Laboratório Voxel"
-          description="Inspeção 3D e prototipagem de estruturas complexas."
+          title={t.dashboard.voxelTitle}
+          description={t.dashboard.voxelDesc}
           icon={Box}
           onClick={() => setCurrentView("voxellab")}
           delay={0.22}
           color="primary"
+          accessLabel={t.dashboard.access}
         />
         <DashboardCard
-          title="Texturas e Skins"
-          description="Ativos 16x16 e UV-Layouts procedurais (SVG/Canvas)."
+          title={t.dashboard.texturesTitle}
+          description={t.dashboard.texturesDesc}
           icon={Paintbrush}
           onClick={() => setCurrentView("skin")}
           delay={0.3}
           color="secondary"
+          accessLabel={t.dashboard.access}
         />
       </div>
 
@@ -224,35 +230,35 @@ export default function Dashboard({ setCurrentView }: Props) {
             <div className="absolute top-0 right-0 -mt-16 -mr-16 w-80 h-80 bg-m3-primary/10 blur-3xl rounded-full" />
             <h2 className="text-2xl font-bold text-m3-on-surface mb-6 flex items-center gap-3">
               <Sparkles className="w-6 h-6 text-m3-primary" />
-              Core Objectives
+              {t.dashboard.coreObjectives}
             </h2>
             <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 text-m3-on-surface-variant">
               <li className="flex items-start gap-4 bg-m3-surface p-5 rounded-3xl border border-m3-outline-variant group hover:border-m3-primary/50 transition-all shadow-m3-1">
                 <div className="w-8 h-8 flex items-center justify-center rounded-full bg-m3-primary text-m3-on-primary font-bold text-xs">01</div>
                 <div>
-                  <p className="font-bold text-m3-on-surface text-sm uppercase tracking-tight">Script Automation Core</p>
-                  <p className="text-xs mt-1 leading-relaxed">Bots Mineflayer com pathfinding avançado e coleta inteligente.</p>
+                  <p className="font-bold text-m3-on-surface text-sm uppercase tracking-tight">{t.dashboard.obj1Title}</p>
+                  <p className="text-xs mt-1 leading-relaxed">{t.dashboard.obj1Desc}</p>
                 </div>
               </li>
               <li className="flex items-start gap-4 bg-m3-surface p-5 rounded-3xl border border-m3-outline-variant group hover:border-m3-primary/50 transition-all shadow-m3-1">
                 <div className="w-8 h-8 flex items-center justify-center rounded-full bg-m3-primary text-m3-on-primary font-bold text-xs">02</div>
                 <div>
-                  <p className="font-bold text-m3-on-surface text-sm uppercase tracking-tight">Environment Integration</p>
-                  <p className="text-xs mt-1 leading-relaxed">Otimização de I/O em ambientes de alta performance.</p>
+                  <p className="font-bold text-m3-on-surface text-sm uppercase tracking-tight">{t.dashboard.obj2Title}</p>
+                  <p className="text-xs mt-1 leading-relaxed">{t.dashboard.obj2Desc}</p>
                 </div>
               </li>
               <li className="flex items-start gap-4 bg-m3-surface p-5 rounded-3xl border border-m3-outline-variant group hover:border-m3-primary/50 transition-all shadow-m3-1">
                 <div className="w-8 h-8 flex items-center justify-center rounded-full bg-m3-primary text-m3-on-primary font-bold text-xs">03</div>
                 <div>
-                  <p className="font-bold text-m3-on-surface text-sm uppercase tracking-tight">Procedural Meshing</p>
-                  <p className="text-xs mt-1 leading-relaxed">Arquitetura de mapas em mega-escala com distorção de ruído.</p>
+                  <p className="font-bold text-m3-on-surface text-sm uppercase tracking-tight">{t.dashboard.obj3Title}</p>
+                  <p className="text-xs mt-1 leading-relaxed">{t.dashboard.obj3Desc}</p>
                 </div>
               </li>
               <li className="flex items-start gap-4 bg-m3-surface p-5 rounded-3xl border border-m3-outline-variant group hover:border-m3-primary/50 transition-all shadow-m3-1">
                 <div className="w-8 h-8 flex items-center justify-center rounded-full bg-m3-primary text-m3-on-primary font-bold text-xs">04</div>
                 <div>
-                  <p className="font-bold text-m3-on-surface text-sm uppercase tracking-tight">Security Audit</p>
-                  <p className="text-xs mt-1 leading-relaxed">Monitoramento de estresse e prevenção de race conditions.</p>
+                  <p className="font-bold text-m3-on-surface text-sm uppercase tracking-tight">{t.dashboard.obj4Title}</p>
+                  <p className="text-xs mt-1 leading-relaxed">{t.dashboard.obj4Desc}</p>
                 </div>
               </li>
             </ul>
@@ -262,13 +268,13 @@ export default function Dashboard({ setCurrentView }: Props) {
              <div className="flex items-center justify-between mb-8">
                 <h3 className="text-xl font-bold text-m3-on-surface flex items-center gap-3">
                    <Clock className="w-6 h-6 text-m3-secondary" />
-                   Artefatos Recentes
+                   {t.dashboard.recentArtifacts}
                 </h3>
                 <button 
                   onClick={() => setCurrentView("vault")}
                   className="px-4 py-2 bg-m3-secondary-container text-m3-on-secondary-container rounded-full text-xs font-bold transition-transform active:scale-95"
                 >
-                  Ver Vault
+                  {t.dashboard.viewVault}
                 </button>
              </div>
 
@@ -299,7 +305,7 @@ export default function Dashboard({ setCurrentView }: Props) {
                    ))
                  ) : (
                     <div className="col-span-2 py-12 text-center bg-m3-surface-variant/20 rounded-[32px] border-2 border-dashed border-m3-outline-variant">
-                       <p className="text-sm font-medium text-m3-on-surface-variant opacity-60">Nenhum artefato detectado.</p>
+                       <p className="text-sm font-medium text-m3-on-surface-variant opacity-60">{t.dashboard.noArtifacts}</p>
                     </div>
                  )}
               </div>
@@ -314,7 +320,7 @@ export default function Dashboard({ setCurrentView }: Props) {
         >
           <div className="p-8 rounded-[32px] bg-m3-surface border border-m3-outline-variant shadow-m3-1 h-full flex flex-col">
             <div className="flex items-center justify-between mb-8">
-              <h3 className="text-lg font-bold text-m3-on-surface uppercase tracking-widest opacity-70">Logs de Execução</h3>
+              <h3 className="text-lg font-bold text-m3-on-surface uppercase tracking-widest opacity-70">{t.dashboard.executionLogs}</h3>
               <div className="w-2.5 h-2.5 rounded-full bg-m3-primary animate-pulse" />
             </div>
             
@@ -385,6 +391,7 @@ const DashboardCard = memo(({
   onClick,
   delay,
   color,
+  accessLabel,
 }: {
   title: string;
   description: string;
@@ -392,6 +399,7 @@ const DashboardCard = memo(({
   onClick: () => void;
   delay: number;
   color: 'primary' | 'secondary';
+  accessLabel: string;
 }) => {
   const styles = {
     primary: {
@@ -423,7 +431,7 @@ const DashboardCard = memo(({
       <h3 className="text-xl font-bold text-m3-on-surface mb-2">{title}</h3>
       <p className="text-sm text-m3-on-surface-variant font-medium leading-relaxed opacity-80">{description}</p>
       <div className="mt-auto pt-6 flex items-center gap-2 text-xs font-bold text-m3-primary opacity-0 group-hover:opacity-100 transition-opacity">
-        <span>Acessar</span>
+        <span>{accessLabel}</span>
         <ChevronRight className="w-4 h-4" />
       </div>
     </motion.button>

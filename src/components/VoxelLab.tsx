@@ -11,6 +11,8 @@ import { FrontLogger } from "../lib/logger";
 import { saveArtifact } from "../lib/db";
 import { auth } from "../lib/firebase";
 
+import { useTranslation } from "../context/LanguageContext";
+
 // --- Types ---
 interface Voxel {
   position: [number, number, number];
@@ -29,21 +31,27 @@ interface VoxelData {
   };
 }
 
+const voxelTemplates = [
+  { nameKey: "medievalVillage", promptKey: "medievalVillagePrompt", c: 75, d: 60, v: 40 },
+  { nameKey: "abandonedFort", promptKey: "abandonedFortPrompt", c: 85, d: 50, v: 70 },
+  { nameKey: "enchantedForest", promptKey: "enchantedForestPrompt", c: 90, d: 40, v: 80 }
+];
+
 // --- 3D Components ---
 
-function VoxelModel({ voxels, wireframe }: { voxels: Voxel[], wireframe: boolean }) {
-  const meshRef = useRef<THREE.Group>(null);
+function StaticVoxelModel({ voxels, wireframe }: { voxels: Voxel[], wireframe: boolean }) {
+  const groupRef = useRef<THREE.Group>(null);
 
   // Group reference for export logic
   useEffect(() => {
-    if (meshRef.current) {
-      (window as any)._currentVoxelObject = meshRef.current;
+    if (groupRef.current) {
+      (window as any)._currentVoxelObject = groupRef.current;
     }
     return () => { (window as any)._currentVoxelObject = null; };
   }, [voxels]);
 
   return (
-    <group ref={meshRef}>
+    <group ref={groupRef}>
       {voxels.map((v, i) => (
         <mesh key={i} position={v.position} castShadow receiveShadow>
           <boxGeometry args={[0.95, 0.95, 0.95]} />
@@ -61,16 +69,37 @@ function VoxelModel({ voxels, wireframe }: { voxels: Voxel[], wireframe: boolean
   );
 }
 
+function VoxelModel({ voxels, wireframe }: { voxels: Voxel[], wireframe: boolean }) {
+  return (
+    <Float speed={2} rotationIntensity={0.2} floatIntensity={0.4}>
+      <StaticVoxelModel voxels={voxels} wireframe={wireframe} />
+    </Float>
+  );
+}
+
 function Scene({ voxels, wireframe }: { voxels: Voxel[], wireframe: boolean }) {
+  const ambientRef = useRef<THREE.AmbientLight>(null);
+  const pointRef = useRef<THREE.PointLight>(null);
+
+  useFrame((state) => {
+    const t = state.clock.getElapsedTime();
+    if (ambientRef.current) {
+      ambientRef.current.intensity = 0.3 + Math.sin(t * 1.5) * 0.1;
+    }
+    if (pointRef.current) {
+      pointRef.current.intensity = 0.6 + Math.sin(t * 2) * 0.3;
+    }
+  });
+
   return (
     <>
       <color attach="background" args={["#020202"]} />
       <PerspectiveCamera makeDefault position={[12, 12, 12]} />
       <OrbitControls makeDefault enableDamping dampingFactor={0.06} minDistance={2} maxDistance={150} />
       
-      <ambientLight intensity={0.4} />
+      <ambientLight ref={ambientRef} intensity={0.4} />
       <spotLight position={[15, 20, 10]} angle={0.2} penumbra={1} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} />
-      <pointLight position={[-15, -10, -15]} intensity={0.8} color="#00f2ff" />
+      <pointLight ref={pointRef} position={[-15, -10, -15]} intensity={0.8} color="#00f2ff" />
       <hemisphereLight intensity={0.2} groundColor="#000000" />
       
       <Grid 
@@ -88,7 +117,15 @@ function Scene({ voxels, wireframe }: { voxels: Voxel[], wireframe: boolean }) {
       <Suspense fallback={null}>
         <VoxelModel voxels={voxels} wireframe={wireframe} />
         <Environment preset="night" />
-        <ContactShadows resolution={1024} scale={25} blur={1.5} opacity={0.3} far={15} color="#000000" />
+        <ContactShadows 
+          resolution={1024} 
+          scale={30} 
+          blur={2} 
+          opacity={0.5} 
+          far={15} 
+          color="#000000" 
+          position={[0, -0.1, 0]}
+        />
       </Suspense>
 
       <GizmoHelper alignment="bottom-right" margin={[100, 100]}>
@@ -101,6 +138,7 @@ function Scene({ voxels, wireframe }: { voxels: Voxel[], wireframe: boolean }) {
 // --- Main UI Component ---
 
 export default function VoxelLab() {
+  const { t } = useTranslation();
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [data, setData] = useState<VoxelData | null>(null);
@@ -110,6 +148,12 @@ export default function VoxelLab() {
   const [redoStack, setRedoStack] = useState<VoxelData[]>([]);
   const [wireframe, setWireframe] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  
+  // Generation Parameters
+  const [complexity, setComplexity] = useState(65);
+  const [density, setDensity] = useState(70);
+  const [verticality, setVerticality] = useState(50);
+  const [exportFormat, setExportFormat] = useState<"obj" | "stl">("obj");
 
   // System Stats Simulation
   const [telemetry, setTelemetry] = useState({
@@ -145,7 +189,10 @@ export default function VoxelLab() {
         const response = await fetch("/api/generate-voxel", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt }),
+          body: JSON.stringify({ 
+            prompt,
+            params: { complexity, density, verticality }
+          }),
         });
         
         if (!response.ok) throw new Error(`Gateway Error: ${response.status}`);
@@ -154,7 +201,7 @@ export default function VoxelLab() {
         if (result.error) throw new Error(result.error);
       } catch (e: any) {
         FrontLogger.warn("Voxel API Failure, falling back to Offline Engine", { error: e.message });
-        toast.info("Processamento Local Ativado", { description: "Gerando voxel procedural offline." });
+        toast.info(t.voxelLab.offlineProcessing, { description: t.voxelLab.offlineDesc });
         const { OfflineEngine } = await import("../services/OfflineEngine");
         result = OfflineEngine.generateVoxel(prompt);
       }
@@ -176,13 +223,13 @@ export default function VoxelLab() {
       }
       setRedoStack([]);
 
-      toast.success("Estrutura Sincronizada", { 
-        description: `Matriz compilada em ${newData.stats.generationTime}ms.` 
+      toast.success(t.voxelLab.syncedStructure, { 
+        description: t.voxelLab.matrixCompiled.replace('{time}', newData.stats.generationTime?.toString() || '0')
       });
       setTelemetry(t => ({ ...t, status: "READY" }));
     } catch (err: any) {
       FrontLogger.error("VOXEL_GENERATION_FAULT", { error: err.message });
-      toast.error("Falha na Matriz", { description: err.message });
+      toast.error(t.voxelLab.matrixFault, { description: err.message });
       setTelemetry(t => ({ ...t, status: "FAULT" }));
     } finally {
       setIsGenerating(false);
@@ -191,23 +238,23 @@ export default function VoxelLab() {
 
   const exportOBJ = () => {
     const obj = (window as any)._currentVoxelObject;
-    if (!obj) return toast.error("Objeto não encontrado no contexto 3D");
+    if (!obj) return toast.error(t.voxelLab.objectNotFound);
     try {
       GeometryEngine.exportToOBJ(obj, `${data?.name || 'voxel'}_export.obj`);
-      toast.success("Exportação Finalizada", { description: "Arquivo .obj baixado com sucesso." });
+      toast.success(t.voxelLab.exportFinished, { description: t.voxelLab.objSuccess });
     } catch (e: any) {
-      toast.error("Falha na Exportação", { description: e.message });
+      toast.error(t.voxelLab.exportFault, { description: e.message });
     }
   };
 
   const exportSTL = () => {
     const obj = (window as any)._currentVoxelObject;
-    if (!obj) return toast.error("Objeto não encontrado no contexto 3D");
+    if (!obj) return toast.error(t.voxelLab.objectNotFound);
     try {
       GeometryEngine.exportToSTL(obj, `${data?.name || 'voxel'}_export.stl`);
-      toast.success("Exportação Finalizada", { description: "Arquivo .stl binário pronto." });
+      toast.success(t.voxelLab.exportFinished, { description: t.voxelLab.stlSuccess });
     } catch (e: any) {
-      toast.error("Falha na Exportação", { description: e.message });
+      toast.error(t.voxelLab.exportFault, { description: e.message });
     }
   };
 
@@ -239,8 +286,21 @@ export default function VoxelLab() {
     FrontLogger.info("REDO_EXECUTED", { remaining: newRedo.length });
   };
 
+  const handleExport = () => {
+    if (exportFormat === "obj") exportOBJ();
+    else exportSTL();
+  };
+
+  const applyTemplate = (name: string, p: string, params: { c: number, d: number, v: number }) => {
+    setPrompt(p);
+    setComplexity(params.c);
+    setDensity(params.d);
+    setVerticality(params.v);
+    toast.success(t.voxelLab.templateApplied.replace('{name}', name), { description: t.voxelLab.templateConfigured });
+  };
+
   const saveSession = () => {
-    if (!data) return toast.error("Sem dados para salvar");
+    if (!data) return toast.error(t.voxelLab.noDataSave);
     try {
       const session = {
         data,
@@ -248,24 +308,24 @@ export default function VoxelLab() {
         timestamp: Date.now()
       };
       localStorage.setItem("voxel_lab_session", JSON.stringify(session));
-      toast.success("Sessão Salva Localmente", { description: "Matriz persistida no buffer do navegador." });
+      toast.success(t.voxelLab.sessionSavedLocal, { description: t.voxelLab.sessionPersisted });
       FrontLogger.info("SESSION_PERSISTED_LOCAL");
     } catch (e: any) {
-      toast.error("Falha ao salvar sessão");
+      toast.error(t.voxelLab.saveSessionFault);
     }
   };
 
   const saveToCloud = async () => {
-    if (!data) return toast.error("Sem dados para arquivar");
-    if (!auth.currentUser) return toast.error("Autenticação necessária", { description: "Faça login para salvar na nuvem." });
+    if (!data) return toast.error(t.voxelLab.noDataArchive);
+    if (!auth.currentUser) return toast.error(t.voxelLab.authRequired, { description: t.voxelLab.loginToSave });
 
-    const cloudId = toast.loading("Arquivando Matriz na Nuvem...");
+    const cloudId = toast.loading(t.voxelLab.archivingCloud);
     try {
       await saveArtifact('voxel', `Voxel: ${data.name}`, JSON.stringify(data));
-      toast.success("Arquivado com Sucesso", { id: cloudId, description: "Estrutura persistida no Cloud Vault." });
+      toast.success(t.voxelLab.archivedSuccess, { id: cloudId, description: t.voxelLab.archivedVault });
       FrontLogger.info("VOXEL_CLOUD_PERSISTENCE_SUCCESS");
     } catch (e: any) {
-      toast.error("Falha no Cloud Vault", { id: cloudId, description: e.message });
+      toast.error(t.voxelLab.cloudFault, { id: cloudId, description: e.message });
       FrontLogger.error("VOXEL_CLOUD_PERSISTENCE_FAULT", { error: e.message });
     }
   };
@@ -273,15 +333,15 @@ export default function VoxelLab() {
   const loadSession = () => {
     try {
       const saved = localStorage.getItem("voxel_lab_session");
-      if (!saved) return toast.error("Nenhuma sessão salva encontrada");
+      if (!saved) return toast.error(t.voxelLab.noSessionFound);
       
       const session = JSON.parse(saved);
       setData(session.data);
       setPrompt(session.prompt);
-      toast.success("Sessão Restaurada", { description: `Matriz "${session.data.name}" carregada com sucesso.` });
+      toast.success(t.voxelLab.sessionRestored, { description: t.voxelLab.matrixLoaded.replace('{name}', session.data.name) });
       FrontLogger.info("SESSION_LOADED_LOCAL");
     } catch (e: any) {
-      toast.error("Falha ao carregar sessão");
+      toast.error(t.voxelLab.loadSessionFault);
     }
   };
 
@@ -294,38 +354,59 @@ export default function VoxelLab() {
         <div className="text-center md:text-left space-y-2">
           <div className="flex items-center justify-center md:justify-start gap-2 mb-3">
              <div className="px-3 py-1 bg-m3-primary-container border border-m3-primary/20 text-m3-on-primary-container text-[10px] font-black uppercase tracking-[0.2em] rounded-full shadow-m3-1 animate-pulse">
-               {telemetry.status === "COMPUTING" ? "PROCESSANDO_LINK" : "SISTEMA_ESTRUTURAL_V1"}
+               {telemetry.status === "COMPUTING" ? t.voxelLab.computing : t.voxelLab.systemStatus}
              </div>
              <div className="px-3 py-1 bg-m3-surface-container-high border border-m3-outline-variant text-m3-on-surface-variant text-[10px] font-black uppercase tracking-[0.2em] rounded-full shadow-m3-1 backdrop-blur-xl">
-               Voxel_Kernel_V9
+               Voxel_Lab
              </div>
           </div>
           <h1 className="text-5xl md:text-6xl font-black text-m3-on-surface uppercase italic tracking-tighter leading-none">
             Laboratório <span className="text-m3-primary shadow-m3-2">Voxel</span>
           </h1>
           <p className="text-m3-on-surface-variant/60 text-sm font-black uppercase tracking-widest leading-none mt-2">
-            Ecossistema de Geometria Paramétrica Industrial.
+            {t.voxelLab.industrialEcosystem}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
            <div className="hidden lg:flex items-center gap-6 px-6 py-3 border border-m3-outline-variant rounded-full bg-m3-surface-container-low/40 backdrop-blur-2xl shadow-m3-2 mr-2">
               <div className="flex flex-col items-center">
-                <span className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-50">Engine_FPS</span>
+                <span className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-50">{t.voxelLab.fps}</span>
                 <span className="text-sm font-black text-m3-primary font-mono tracking-tighter">{telemetry.fps}</span>
               </div>
               <div className="w-px h-8 bg-m3-outline-variant" />
               <div className="flex flex-col items-center">
-                <span className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-50">GPU_Buffer</span>
+                <span className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-50">{t.voxelLab.gpuBuffer}</span>
                 <span className="text-sm font-black text-m3-secondary font-mono tracking-tighter">{telemetry.gpuMem}</span>
               </div>
            </div>
            
            <div className="flex gap-2">
+             <div className="bg-m3-surface-container-high border border-m3-outline-variant rounded-2xl flex items-center p-1 shadow-m3-1">
+                <button 
+                  onClick={() => setExportFormat("obj")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[10px] font-black transition-all",
+                    exportFormat === "obj" ? "bg-m3-primary text-m3-on-primary shadow-m3-2" : "text-m3-on-surface-variant hover:bg-m3-surface-variant"
+                  )}
+                >
+                  OBJ
+                </button>
+                <button 
+                  onClick={() => setExportFormat("stl")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[10px] font-black transition-all",
+                    exportFormat === "stl" ? "bg-m3-primary text-m3-on-primary shadow-m3-2" : "text-m3-on-surface-variant hover:bg-m3-surface-variant"
+                  )}
+                >
+                  STL
+                </button>
+             </div>
+
              {[
-               { icon: Settings2, onClick: () => setShowSettings(!showSettings), title: "Configurações", color: "text-m3-on-surface-variant" },
-               { icon: FolderOpen, onClick: loadSession, title: "Abrir Local", color: "text-m3-on-surface-variant" },
-               { icon: Save, onClick: saveSession, title: "Salvar Local", color: "text-m3-on-surface-variant" }
+               { icon: Settings2, onClick: () => setShowSettings(!showSettings), title: t.voxelLab.settings, color: "text-m3-on-surface-variant" },
+               { icon: FolderOpen, onClick: loadSession, title: t.voxelLab.openLocal, color: "text-m3-on-surface-variant" },
+               { icon: Save, onClick: saveSession, title: t.voxelLab.saveLocal, color: "text-m3-on-surface-variant" }
              ].map((btn, i) => (
                <button 
                 key={i}
@@ -344,24 +425,26 @@ export default function VoxelLab() {
            <div className="relative group">
               <button 
                 disabled={!data}
-                className="p-3.5 bg-m3-primary text-m3-on-primary rounded-2xl transition-all disabled:opacity-50 disabled:grayscale active:scale-95 shadow-m3-2"
+                onClick={handleExport}
+                className="p-3.5 bg-m3-primary text-m3-on-primary rounded-2xl transition-all disabled:opacity-50 disabled:grayscale active:scale-95 shadow-m3-2 flex items-center gap-2 px-6"
               >
                 <Download className="w-5 h-5" />
+                <span className="text-[11px] font-black uppercase tracking-widest hidden sm:inline">{t.voxelLab.exportAs.replace('{format}', exportFormat.toUpperCase())}</span>
               </button>
               {data && (
                 <div className="absolute right-0 top-full mt-3 w-56 p-2 bg-m3-surface-container-highest border border-m3-outline-variant rounded-[2rem] shadow-m3-4 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all pointer-events-none group-hover:pointer-events-auto z-50">
                    <button onClick={exportOBJ} className="w-full flex items-center gap-3 px-5 py-3 text-[11px] font-black text-m3-on-surface-variant hover:bg-m3-primary/10 hover:text-m3-primary transition-all rounded-xl">
-                      <FileCode className="w-4 h-4" /> Export Mesh (.obj)
+                      <FileCode className="w-4 h-4" /> {t.voxelLab.exportMesh}
                    </button>
                    <button onClick={exportSTL} className="w-full flex items-center gap-3 px-5 py-3 text-[11px] font-black text-m3-on-surface-variant hover:bg-m3-secondary/10 hover:text-m3-secondary transition-all rounded-xl">
-                      <BoxSelect className="w-4 h-4" /> Export Binary (.stl)
+                      <BoxSelect className="w-4 h-4" /> {t.voxelLab.exportBinary}
                    </button>
                    <button onClick={saveToCloud} className="w-full flex items-center gap-3 px-5 py-3 text-[11px] font-black text-m3-on-surface-variant hover:bg-m3-primary/10 hover:text-m3-primary transition-all rounded-xl">
-                      <Zap className="w-4 h-4" /> Arquivar na Nuvem
+                      <Zap className="w-4 h-4" /> {t.voxelLab.archiveCloud}
                    </button>
                    <div className="h-px bg-m3-outline-variant my-1 px-4" />
-                   <button onClick={() => toast.info("Exportação JSON em buffer.")} className="w-full flex items-center gap-3 px-5 py-3 text-[11px] font-black text-m3-on-surface-variant hover:bg-m3-tertiary/10 hover:text-m3-tertiary transition-all rounded-xl">
-                      <FileJson className="w-4 h-4" /> Exportar Dados (.json)
+                   <button onClick={() => toast.info(t.voxelLab.exportJson)} className="w-full flex items-center gap-3 px-5 py-3 text-[11px] font-black text-m3-on-surface-variant hover:bg-m3-tertiary/10 hover:text-m3-tertiary transition-all rounded-xl">
+                      <FileJson className="w-4 h-4" /> {t.voxelLab.exportJson}
                    </button>
                 </div>
               )}
@@ -379,10 +462,10 @@ export default function VoxelLab() {
           {/* Viewport Control Bar */}
           <div className="absolute top-8 right-8 flex flex-col gap-4">
              {[
-               { icon: RotateCcw, onClick: undo, disabled: undoStack.length === 0, title: "Desfazer", color: "text-m3-on-surface-variant" },
-               { icon: RotateCw, onClick: redo, disabled: redoStack.length === 0, title: "Refazer", color: "text-m3-on-surface-variant" },
-               { icon: Maximize, onClick: () => setWireframe(!wireframe), active: wireframe, title: "Wireframe", color: wireframe ? "bg-m3-primary text-m3-on-primary" : "text-m3-on-surface-variant" },
-               { icon: Target, onClick: () => toast.info("Modo de Inspeção Ativado"), title: "Inspecionar", color: "text-m3-on-surface-variant" }
+               { icon: RotateCcw, onClick: undo, disabled: undoStack.length === 0, title: t.voxelLab.undo, color: "text-m3-on-surface-variant" },
+               { icon: RotateCw, onClick: redo, disabled: redoStack.length === 0, title: t.voxelLab.redo, color: "text-m3-on-surface-variant" },
+               { icon: Maximize, onClick: () => setWireframe(!wireframe), active: wireframe, title: t.voxelLab.wireframe, color: wireframe ? "bg-m3-primary text-m3-on-primary" : "text-m3-on-surface-variant" },
+               { icon: Target, onClick: () => toast.info(t.voxelLab.inspect), title: t.voxelLab.inspect, color: "text-m3-on-surface-variant" }
              ].map((tool, i) => (
                <button 
                  key={i}
@@ -412,11 +495,11 @@ export default function VoxelLab() {
                     <div className={cn("w-2.5 h-2.5 rounded-full shadow-m3-1 animate-pulse", telemetry.status === "READY" ? "bg-m3-primary" : "bg-m3-secondary")} />
                     <span className="text-[11px] font-black text-m3-on-surface-variant uppercase tracking-[0.25em]">{telemetry.status}</span>
                  </div>
-                 <span className="text-[10px] font-mono text-m3-on-surface-variant/40 uppercase font-black">NODE_ESTRUTURAL</span>
+                 <span className="text-[10px] font-mono text-m3-on-surface-variant/40 uppercase font-black">Link_Ativo</span>
                </div>
                
                <div className="space-y-2">
-                 <div className="text-[10px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-40">Entidade_Ativa</div>
+                 <div className="text-[10px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-40">{t.voxelLab.activeEntity}</div>
                  <div className="text-2xl font-black text-m3-on-surface truncate max-w-[220px] uppercase italic tracking-tighter leading-none">
                     {data?.name || "Null_Pointer"}
                  </div>
@@ -424,13 +507,13 @@ export default function VoxelLab() {
 
                <div className="grid grid-cols-2 gap-8">
                  <div className="space-y-1">
-                   <div className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-40">Polígonos</div>
+                   <div className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-40">{t.voxelLab.polygons}</div>
                    <div className="text-base font-black text-m3-primary font-mono tracking-tighter">
                      {telemetry.triangles.toLocaleString()}
                    </div>
                  </div>
                  <div className="space-y-1">
-                   <div className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-40">Latência</div>
+                   <div className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-40">{t.voxelLab.latency}</div>
                    <div className="text-base font-black text-m3-secondary font-mono tracking-tighter">
                       {data?.stats.generationTime || 0}ms
                    </div>
@@ -439,7 +522,7 @@ export default function VoxelLab() {
 
                <div className="pt-4 border-t border-m3-outline-variant/30">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-40">Carga_Matriz</span>
+                    <span className="text-[9px] font-black text-m3-on-surface-variant uppercase tracking-widest opacity-40">{t.voxelLab.matrixLoad}</span>
                     <span className="text-[10px] font-black text-m3-primary">{(data?.voxels.length || 0) / 2.5}%</span>
                   </div>
                   <div className="h-2 bg-m3-surface-container rounded-full overflow-hidden shadow-inner p-0.5">
@@ -460,8 +543,8 @@ export default function VoxelLab() {
                  <Box className="w-20 h-20 text-m3-on-surface-variant/20 animate-pulse" />
                </div>
                <div className="text-center space-y-2">
-                 <p className="text-m3-on-surface-variant font-black text-xs uppercase tracking-[0.6em] opacity-40">Matriz_Em_Repouso</p>
-                 <p className="text-m3-primary/40 font-black text-[10px] uppercase tracking-widest">Aguardando_Sincronização_Neural</p>
+                 <p className="text-m3-on-surface-variant font-black text-xs uppercase tracking-[0.6em] opacity-40">{t.voxelLab.restMatrix}</p>
+                 <p className="text-m3-primary/40 font-black text-[10px] uppercase tracking-widest">{t.voxelLab.waitingSync}</p>
                </div>
             </div>
           )}
@@ -477,8 +560,8 @@ export default function VoxelLab() {
                  </div>
                </div>
                <div className="mt-12 flex flex-col items-center gap-3">
-                 <p className="text-m3-primary font-black text-sm uppercase tracking-[0.5em] animate-pulse">Sintetizando_Geometria...</p>
-                 <span className="text-[10px] font-black text-m3-on-surface-variant/40 uppercase tracking-[0.2em]">[ ALOCANDO SUBPROCESSOS DE RENDERIZAÇÃO ]</span>
+                 <p className="text-m3-primary font-black text-sm uppercase tracking-[0.5em] animate-pulse">{t.voxelLab.synthesizing}</p>
+                 <span className="text-[10px] font-black text-m3-on-surface-variant/40 uppercase tracking-[0.2em]">{t.voxelLab.allocating}</span>
                </div>
             </div>
           )}
@@ -492,7 +575,7 @@ export default function VoxelLab() {
              </div>
              <input 
                type="text" 
-               placeholder="Descreva a estrutura industrial..."
+               placeholder={t.voxelLab.promptPlaceholder}
                className="flex-1 bg-transparent border-none outline-none py-4 text-sm text-m3-on-surface placeholder:text-m3-on-surface-variant/30 font-black uppercase tracking-tight"
                value={prompt}
                onChange={(e) => setPrompt(e.target.value)}
@@ -512,10 +595,10 @@ export default function VoxelLab() {
              
              <div className="flex border-b border-m3-outline-variant/30 p-4 gap-3 bg-m3-surface-container-low/40 backdrop-blur-xl relative z-10">
                 {[
-                  { id: "inspect", label: "Inspeção", icon: Target },
-                  { id: "history", label: "Histórico", icon: History },
-                  { id: "layers", label: "Camadas", icon: Layers },
-                  { id: "telemetry", label: "Métricas", icon: Activity }
+                  { id: "inspect", label: t.voxelLab.tabInspect, icon: Target },
+                  { id: "history", label: t.voxelLab.tabHistory, icon: History },
+                  { id: "layers", label: t.voxelLab.tabLayers, icon: Layers },
+                  { id: "telemetry", label: t.voxelLab.tabTelemetry, icon: Activity }
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -531,8 +614,7 @@ export default function VoxelLab() {
                 ))}
              </div>
 
-             <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative z-10">
-                <AnimatePresence mode="wait">
+             <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative z-10">                <AnimatePresence mode="wait">
                    {activeTab === "inspect" && (
                      <motion.div 
                         initial={{ opacity: 0, y: 10 }}
@@ -545,7 +627,7 @@ export default function VoxelLab() {
                             <div className="space-y-4 pb-10 border-b border-m3-outline-variant/30">
                                <div className="flex items-center justify-between">
                                  <h3 className="text-m3-on-surface font-black uppercase italic tracking-tighter text-3xl">{data.name}</h3>
-                                 <div className="px-3 py-1 bg-m3-primary/10 border border-m3-primary/20 rounded-full text-m3-primary text-[10px] font-black uppercase tracking-widest shadow-m3-1">Verificado</div>
+                                 <div className="px-3 py-1 bg-m3-primary/10 border border-m3-primary/20 rounded-full text-m3-primary text-[10px] font-black uppercase tracking-widest shadow-m3-1">{t.voxelLab.verified}</div>
                                </div>
                                <p className="text-m3-on-surface-variant/70 text-sm leading-relaxed font-bold italic">"{data.description}"</p>
                             </div>
@@ -555,7 +637,7 @@ export default function VoxelLab() {
                                  { label: "Escala_X", val: data.stats.dimensions[0], color: "text-m3-primary", bg: "bg-m3-primary/5" },
                                  { label: "Escala_Y", val: data.stats.dimensions[1], color: "text-m3-secondary", bg: "bg-m3-secondary/5" },
                                  { label: "Escala_Z", val: data.stats.dimensions[2], color: "text-m3-tertiary", bg: "bg-m3-tertiary/5" },
-                                 { label: "Fill_Rate", val: `${((data.stats.totalBlocks / (data.stats.dimensions[0] * data.stats.dimensions[1] * data.stats.dimensions[2] || 1)) * 100).toFixed(1)}%`, color: "text-m3-primary", bg: "bg-m3-primary/5" }
+                                 { label: t.voxelLab.fillRate, val: `${((data.stats.totalBlocks / (data.stats.dimensions[0] * data.stats.dimensions[1] * data.stats.dimensions[2] || 1)) * 100).toFixed(1)}%`, color: "text-m3-primary", bg: "bg-m3-primary/5" }
                                ].map((stat, i) => (
                                  <div key={i} className={cn("p-6 border border-m3-outline-variant/30 rounded-[2rem] hover:shadow-m3-2 transition-all group", stat.bg)}>
                                     <div className="text-[10px] font-black text-m3-on-surface-variant/40 uppercase mb-3 flex justify-between">
@@ -570,16 +652,16 @@ export default function VoxelLab() {
                             <div className="p-8 bg-m3-surface-container-high/40 border border-m3-outline-variant rounded-[2.5rem] space-y-6 shadow-m3-2">
                                <div className="flex items-center gap-3">
                                  <BarChart3 className="w-5 h-5 text-m3-secondary" />
-                                 <span className="text-[11px] font-black text-m3-on-surface-variant uppercase tracking-[0.2em] opacity-60">Relatório_Integridade</span>
+                                 <span className="text-[11px] font-black text-m3-on-surface-variant uppercase tracking-[0.2em] opacity-60">{t.voxelLab.integrityReport}</span>
                                </div>
                                <div className="space-y-5">
                                   <div className="flex justify-between items-center text-xs">
-                                     <span className="text-m3-on-surface-variant font-black uppercase opacity-40">Complexidade</span>
+                                     <span className="text-m3-on-surface-variant font-black uppercase opacity-40">{t.voxelLab.complexity}</span>
                                      <span className="text-m3-on-surface font-black uppercase tracking-widest">Procedural_Ops</span>
                                   </div>
                                   <div className="flex justify-between items-center text-xs">
-                                     <span className="text-m3-on-surface-variant font-black uppercase opacity-40">Status_Mesh</span>
-                                     <span className="text-m3-primary font-black uppercase tracking-widest">100% NOMINAL</span>
+                                     <span className="text-m3-on-surface-variant font-black uppercase opacity-40">{t.voxelLab.meshStatus}</span>
+                                     <span className="text-m3-primary font-black uppercase tracking-widest">{t.voxelLab.nominal}</span>
                                   </div>
                                </div>
                             </div>
@@ -589,14 +671,14 @@ export default function VoxelLab() {
                              <div className="p-10 bg-m3-surface-container-high border border-m3-outline-variant rounded-[3rem] shadow-m3-1">
                                <Target className="w-20 h-20" />
                              </div>
-                             <p className="text-[11px] font-black uppercase tracking-[0.5em] max-w-[240px] leading-relaxed">Seleção_Vazia: Informe o prompt para invocar a matriz neural</p>
+                             <p className="text-[11px] font-black uppercase tracking-[0.5em] max-w-[240px] leading-relaxed">{t.voxelLab.emptySelection}</p>
                           </div>
                         )}
                      </motion.div>
                    )}
+}
 
-                   {activeTab === "history" && (
-                      <motion.div 
+                         <motion.div 
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
@@ -604,7 +686,7 @@ export default function VoxelLab() {
                       >
                          <h4 className="text-[10px] font-mono text-neutral-600 font-black uppercase tracking-widest flex items-center gap-2 mb-4">
                            <History className="w-4 h-4" />
-                           Snapshot_Logs
+                           {t.voxelLab.snapshotLogs}
                          </h4>
                          <div className="space-y-3">
                             {history.map((h, i) => (
@@ -628,7 +710,7 @@ export default function VoxelLab() {
                                         {h.name}
                                       </div>
                                       <div className="text-[9px] font-mono text-neutral-600 uppercase font-bold">
-                                        {h.stats.totalBlocks} Blocks • {h.stats.generationTime || 0}ms
+                                        {h.stats.totalBlocks} {t.voxelLab.totalBlocks} • {h.stats.generationTime || 0}ms
                                       </div>
                                    </div>
                                 </div>
@@ -638,12 +720,38 @@ export default function VoxelLab() {
                             {history.length === 0 && (
                               <div className="text-[10px] font-mono text-neutral-700 uppercase p-12 border border-dashed border-neutral-800 rounded-3xl text-center space-y-4">
                                  <Database className="w-10 h-10 mx-auto opacity-20" />
-                                 <p className="tracking-widest">Cache_Sessão_Vazio</p>
+                                 <p className="tracking-widest">{t.voxelLab.cacheEmpty}</p>
                               </div>
                             )}
                          </div>
-                      </motion.div>
-                   )}
+
+                         <div className="mt-8 space-y-4">
+                            <h4 className="text-[10px] font-mono text-neutral-600 font-black uppercase tracking-widest flex items-center gap-2 mb-4">
+                              <Sparkles className="w-4 h-4" />
+                              {t.voxelLab.structuralTemplates}
+                            </h4>
+                            <div className="grid grid-cols-1 gap-2">
+                               {voxelTemplates.map((tm, i) => {
+                                 const name = t.voxelLab[tm.nameKey as keyof typeof t.voxelLab] as string;
+                                 const p = t.voxelLab[tm.promptKey as keyof typeof t.voxelLab] as string;
+                                 return (
+                                   <button
+                                     key={i}
+                                     onClick={() => applyTemplate(name, p, { c: tm.c, d: tm.d, v: tm.v })}
+                                     className="flex items-center justify-between p-4 bg-m3-surface-container-low border border-m3-outline-variant rounded-2xl hover:bg-m3-surface-container transition-all group"
+                                   >
+                                     <div className="flex flex-col items-start gap-1">
+                                        <span className="text-[10px] font-black uppercase text-m3-on-surface-variant group-hover:text-m3-primary transition-colors">{name}</span>
+                                        <span className="text-[9px] text-m3-on-surface-variant/40 truncate max-w-[150px]">{p}</span>
+                                     </div>
+                                     <ChevronRight className="w-4 h-4 text-m3-on-surface-variant/20 group-hover:text-m3-primary group-hover:translate-x-1 transition-all" />
+                                   </button>
+                                 );
+                            })}
+                         </div>
+                      </div>
+                   </motion.div>
+                 )}
 
                    {activeTab === "layers" && (
                      <motion.div 
@@ -661,10 +769,10 @@ export default function VoxelLab() {
 
                         <div className="space-y-3">
                            {[
-                             { name: "Matriz_Base", color: "text-emerald-500" },
-                             { name: "Geometria_Primária", color: "text-sky-500" },
-                             { name: "Efeitos_Luminosos", color: "text-amber-500" },
-                             { name: "Partículas_Essência", color: "text-violet-500" }
+                             { name: t.voxelLab.layerBase, color: "text-emerald-500" },
+                             { name: t.voxelLab.layerPrimary, color: "text-sky-500" },
+                             { name: t.voxelLab.layerEffects, color: "text-amber-500" },
+                             { name: t.voxelLab.layerParticles, color: "text-violet-500" }
                            ].map((layer, j) => (
                              <div key={j} className="flex items-center justify-between p-5 bg-neutral-900/60 border border-neutral-800 rounded-[1.5rem] hover:bg-neutral-900 transition-colors shadow-lg group">
                                 <div className="flex items-center gap-3">
@@ -769,20 +877,82 @@ export default function VoxelLab() {
                      <Maximize className="w-5 h-5 rotate-45" />
                    </button>
                 </div>
-                <div className="p-10 space-y-8 h-[400px] overflow-y-auto custom-scrollbar">
-                   <div className="space-y-4">
-                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-black tracking-widest flex items-center gap-2">
-                        <div className="w-1 h-1 bg-sky-500 rounded-full" />
-                        Densidade_Máxima_Processo
-                      </label>
-                      <input type="range" className="w-full h-1.5 bg-neutral-900 rounded-full appearance-none cursor-pointer accent-emerald-500" defaultValue={50} />
-                      <div className="flex justify-between text-[10px] font-mono text-neutral-600">
-                        <span>LOW_PRECISION</span>
-                        <span>ULTRA_STRUCTURAL</span>
-                      </div>
-                   </div>
+                <div className="p-10 space-y-8 h-[450px] overflow-y-auto custom-scrollbar">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                       <div className="p-6 bg-m3-surface-container-low border border-m3-outline-variant rounded-[2rem] space-y-4 relative group hover:border-m3-primary/30 transition-all shadow-m3-2">
+                          <label className="text-[10px] font-mono text-neutral-400 uppercase font-black tracking-widest flex items-center gap-2">
+                            <div className="w-1 h-1 bg-sky-500 rounded-full" />
+                            Complexidade_Estrutural
+                            <div className="group-hover:opacity-100 opacity-0 transition-opacity ml-auto">
+                              <span title="Define o nível de detalhamento e subdivisões da malha voxel.">
+                                <Info className="w-3.5 h-3.5 text-m3-primary" />
+                              </span>
+                            </div>
+                          </label>
+                          <input 
+                            type="range" 
+                            min="10" max="100" 
+                            value={complexity} 
+                            onChange={(e) => setComplexity(Number(e.target.value))}
+                            className="w-full h-1.5 bg-neutral-900 rounded-full appearance-none cursor-pointer accent-m3-primary" 
+                          />
+                          <div className="flex justify-between text-[9px] font-mono text-neutral-600">
+                            <span>MÍNIMA</span>
+                            <span className="text-m3-primary font-black">{complexity}%</span>
+                            <span>MÁXIMA</span>
+                          </div>
+                       </div>
 
-                   <div className="grid grid-cols-2 gap-8">
+                       <div className="p-6 bg-m3-surface-container-low border border-m3-outline-variant rounded-[2rem] space-y-4 relative group hover:border-m3-secondary/30 transition-all shadow-m3-2">
+                          <label className="text-[10px] font-mono text-neutral-400 uppercase font-black tracking-widest flex items-center gap-2">
+                            <div className="w-1 h-1 bg-emerald-500 rounded-full" />
+                            Densidade_Material
+                            <div className="group-hover:opacity-100 opacity-0 transition-opacity ml-auto">
+                              <span title="Controla a solidez e o preenchimento interno da estrutura.">
+                                <Info className="w-3.5 h-3.5 text-m3-secondary" />
+                              </span>
+                            </div>
+                          </label>
+                          <input 
+                            type="range" 
+                            min="10" max="100" 
+                            value={density} 
+                            onChange={(e) => setDensity(Number(e.target.value))}
+                            className="w-full h-1.5 bg-neutral-900 rounded-full appearance-none cursor-pointer accent-m3-secondary" 
+                          />
+                          <div className="flex justify-between text-[9px] font-mono text-neutral-600">
+                            <span>ESPARSO</span>
+                            <span className="text-m3-secondary font-black">{density}%</span>
+                            <span>SÓLIDO</span>
+                          </div>
+                       </div>
+
+                       <div className="p-6 bg-m3-surface-container-low border border-m3-outline-variant rounded-[2rem] space-y-4 relative group hover:border-m3-tertiary/30 transition-all shadow-m3-2 lg:col-span-2">
+                          <label className="text-[10px] font-mono text-neutral-400 uppercase font-black tracking-widest flex items-center gap-2">
+                            <div className="w-1 h-1 bg-amber-500 rounded-full" />
+                            Verticalidade_Link
+                            <div className="group-hover:opacity-100 opacity-0 transition-opacity ml-auto">
+                              <span title="Aumenta a ênfase em estruturas verticais e torres.">
+                                <Info className="w-3.5 h-3.5 text-m3-tertiary" />
+                              </span>
+                            </div>
+                          </label>
+                          <input 
+                            type="range" 
+                            min="0" max="100" 
+                            value={verticality} 
+                            onChange={(e) => setVerticality(Number(e.target.value))}
+                            className="w-full h-1.5 bg-neutral-900 rounded-full appearance-none cursor-pointer accent-m3-tertiary" 
+                          />
+                          <div className="flex justify-between text-[9px] font-mono text-neutral-600">
+                            <span>HORIZONTAL</span>
+                            <span className="text-m3-tertiary font-black">{verticality}%</span>
+                            <span>VERTICAIS</span>
+                          </div>
+                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-8 pt-6">
                       <div className="space-y-4">
                          <label className="text-[10px] font-mono text-neutral-400 uppercase font-black tracking-widest">Ray_Tracing_Bias</label>
                          <div className="flex items-center gap-3">
