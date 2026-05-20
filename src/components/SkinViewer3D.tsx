@@ -67,9 +67,9 @@ export default function SkinViewer3D({
 
       // Interaction Configuration
       viewer.controls.enableRotate = true;
-      viewer.controls.enableZoom = true;
+      viewer.controls.enableZoom = false; // We handle zoom manually via FOV
       viewer.controls.enablePan = false; 
-      
+
       // Load initial texture buffer
       if (skinUrl) {
         const loadOptions: any = { 
@@ -98,14 +98,24 @@ export default function SkinViewer3D({
       viewerRef.current = viewer;
       mountPoint.current.appendChild(viewer.canvas);
 
-      // Sincronizar zoom do scroll com o estado do React
-      viewer.controls.addEventListener('change', () => {
-        if (viewerRef.current) {
-          const currentFov = viewerRef.current.fov;
-          // Debounced or simple sync
-          setZoomLevel(Math.round(currentFov));
-        }
-      });
+      // Handle Manual Wheel Zoom (FOV based)
+      const handleWheel = (e: WheelEvent) => {
+        if (!viewerContainer.current?.contains(e.target as Node)) return;
+        
+        // Only prevent default if we are scrolling over the viewer
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 3 : -3;
+        
+        setZoomLevel(prev => {
+          const next = Math.min(110, Math.max(10, prev + delta));
+          if (viewerRef.current) {
+            viewerRef.current.fov = next;
+          }
+          return next;
+        });
+      };
+
+      window.addEventListener('wheel', handleWheel, { passive: false });
 
       const resizeObserver = new ResizeObserver((entries) => {
         if (entries.length > 0 && viewerRef.current && mountPoint.current) {
@@ -119,6 +129,7 @@ export default function SkinViewer3D({
       resizeObserver.observe(mountPoint.current);
 
       return () => {
+        window.removeEventListener('wheel', handleWheel);
         resizeObserver.disconnect();
         safeDispose();
       };
@@ -194,7 +205,7 @@ export default function SkinViewer3D({
 
   const handleZoom = (delta: number) => {
     setZoomLevel(prev => {
-      const next = Math.min(110, Math.max(20, prev + delta));
+      const next = Math.min(110, Math.max(10, prev + delta));
       if (viewerRef.current) {
         viewerRef.current.fov = next;
       }
@@ -240,43 +251,62 @@ export default function SkinViewer3D({
       </div>
 
       {/* Manual Controls Overlay */}
-      <div className="absolute bottom-5 right-5 flex flex-col items-center gap-2 z-30 pointer-events-auto">
-        <div className="flex flex-col gap-1 p-1 bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl">
+      <div className="absolute bottom-5 right-5 flex flex-col items-center gap-3 z-30 pointer-events-auto">
+        <div className="flex flex-col gap-1.5 p-1.5 bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl">
+          <div className="px-2 py-1.5 flex flex-col items-center justify-center gap-0.5">
+            <span className="text-[10px] font-mono font-black text-emerald-500 uppercase tracking-tighter">
+              Zoom
+            </span>
+            <span className="text-[12px] font-mono font-bold text-white">
+              {Math.round(((110 - zoomLevel) / (110 - 10)) * 100)}%
+            </span>
+          </div>
+          
+          <div className="h-px bg-white/10 mx-1" />
+          
           <button 
-            onClick={() => handleZoom(-10)} 
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors text-neutral-400 hover:text-white"
-            title="Zoom In"
+            onClick={() => handleZoom(-5)} 
+            className="p-2.5 hover:bg-emerald-500/20 hover:text-emerald-400 rounded-xl transition-all text-neutral-400 active:scale-90 flex items-center gap-1.5"
+            title="Aproximar (Zoom In)"
           >
-            <ZoomIn className="w-4 h-4" />
+            <ZoomIn className="w-5 h-5" />
+            <span className="text-xs font-black">+</span>
           </button>
+          
           <button 
-            onClick={() => handleZoom(10)} 
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors text-neutral-400 hover:text-white"
-            title="Zoom Out"
+            onClick={() => handleZoom(5)} 
+            className="p-2.5 hover:bg-emerald-500/20 hover:text-emerald-400 rounded-xl transition-all text-neutral-400 active:scale-90 flex items-center gap-1.5"
+            title="Afastar (Zoom Out)"
           >
-            <ZoomOut className="w-4 h-4" />
+            <ZoomOut className="w-5 h-5" />
+            <span className="text-xs font-black">-</span>
           </button>
-          <div className="h-px bg-white/5 mx-1" />
+          
+          <div className="h-px bg-white/10 mx-1" />
+          
           <button 
             onClick={handleResetCamera} 
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors text-neutral-400 hover:text-white"
-            title="Reset Camera"
+            className="p-2.5 hover:bg-white/10 rounded-xl transition-all text-neutral-400 hover:text-white active:scale-90"
+            title="Resetar Câmera"
           >
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="w-5 h-5" />
           </button>
         </div>
 
         <button 
           onClick={toggleAutoRotate}
           className={cn(
-            "p-3 rounded-xl transition-all shadow-2xl flex items-center justify-center border",
+            "p-4 rounded-2xl transition-all shadow-2xl flex items-center justify-center border group/btn",
             isAutoRotating 
-              ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400" 
-              : "bg-neutral-800/80 border-white/5 text-neutral-400 hover:text-white"
+              ? "bg-emerald-500 text-black border-emerald-400 shadow-emerald-500/20" 
+              : "bg-neutral-900/90 border-white/5 text-neutral-400 hover:text-white"
           )}
-          title={isAutoRotating ? "Pause Rotation" : "Play Rotation"}
+          title={isAutoRotating ? "Pausar Rotação" : "Iniciar Rotação"}
         >
-          {isAutoRotating ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
+          {isAutoRotating 
+            ? <Pause className="w-6 h-6 fill-current" /> 
+            : <Play className="w-6 h-6 fill-current ml-0.5" />
+          }
         </button>
       </div>
 

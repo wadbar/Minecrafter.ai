@@ -7,6 +7,7 @@ import { saveAs } from "file-saver";
 import { toast } from "sonner";
 import { saveArtifact } from "../lib/db";
 import { cn } from "../lib/utils";
+import { useAuth } from "../lib/firebase";
 
 interface SkinHistoryItem {
   url: string;
@@ -26,6 +27,7 @@ interface SkinHistoryItem {
 }
 
 export default function SkinGenerator() {
+  const { user } = useAuth();
   const [modelType, setModelType] = useState<"classic" | "slim">("classic");
   const [palette, setPalette] = useState("Default");
   const [customColor, setCustomColor] = useState("#555555");
@@ -236,7 +238,20 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
       setCurrentSkinUrl(data.result);
       updateHistory(data.result);
       addLog("Synthesis confirmed.", "success");
+
+      // ARTIFACT_PERSISTENCE: Archiving Artifact to CloudVault
+      if (user) {
+        try {
+          // Attempting deep archival of the generated artifact
+          await saveArtifact('skin', `Skin Forge [${config.modelType.toUpperCase()}]: ${activePrompt.slice(0, 30)}...`, data.result);
+          addLog("Artifact persisted to Cloud Vault.", "success");
+        } catch (e) {
+          addLog("Cloud persistence offline. Local buffer only.", "warn");
+        }
+      }
+
       return data.result;
+
     } catch (error: any) {
       if (error.name === 'AbortError') {
         addLog("Process Aborted.", "warn");

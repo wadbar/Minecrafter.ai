@@ -112,7 +112,7 @@ export default function TextureGenerator() {
         </div>
 
         <button
-          onClick={() => window.dispatchEvent(new CustomEvent('trigger-matrix-mic'))}
+          onClick={() => window.dispatchEvent(new CustomEvent('trigger-mic'))}
           className="ml-auto flex items-center gap-2 px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 rounded-md transition-all active:scale-95 group"
           title="Dictate prompt via microphone"
         >
@@ -339,7 +339,7 @@ export default function TextureGenerator() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: i * 0.1 }}
                 onClick={() => {
-                   window.dispatchEvent(new CustomEvent('set-matrix-prompt', { detail: img.prompt }));
+                   window.dispatchEvent(new CustomEvent('set-builder-prompt', { detail: img.prompt }));
                    toast.success("Prompt carregado!", { description: "O exemplo foi injetado no campo de comando." });
                 }}
                 className="min-w-[280px] snap-center group relative bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden hover:border-emerald-500 transition-all cursor-pointer active:scale-95 shadow-xl"

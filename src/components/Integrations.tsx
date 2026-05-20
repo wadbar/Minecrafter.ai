@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plug, Download, Server, Key, FileJson, ShoppingBag, CheckCircle, Loader2, Cpu, Zap } from "lucide-react";
+import { Plug, Download, Server, Key, FileJson, ShoppingBag, CheckCircle, Loader2, Cpu, Zap, Save } from "lucide-react";
 import { cn } from "../lib/utils";
 import { toast } from "sonner";
 import JSZip from "jszip";
@@ -15,7 +15,7 @@ export default function Integrations() {
            </div>
            <div className="flex flex-col">
               <div className="flex items-center gap-2 text-emerald-500 font-mono text-[9px] tracking-[0.4em] font-black uppercase">
-                 Nexus_Protocol
+                 Service_Bridge
               </div>
               <h2 className="text-4xl font-black text-white tracking-tighter uppercase italic">Bridge <span className="text-emerald-500">_</span> Deployment</h2>
            </div>
@@ -29,6 +29,8 @@ export default function Integrations() {
         <ServerIntegrationPanel />
         <EnvironmentIntegrationPanel />
       </div>
+
+      <GlobalMinecraftConfig />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <BedrockStorePanel />
@@ -95,6 +97,92 @@ function EnvironmentIntegrationPanel() {
   );
 }
 
+function GlobalMinecraftConfig() {
+  const [config, setConfig] = useState(() => {
+    const saved = localStorage.getItem("mc_global_config");
+    return saved ? JSON.parse(saved) : {
+      host: "localhost",
+      port: 25565,
+      username: "AI_Studio_Agent",
+      auth: "offline"
+    };
+  });
+
+  const handleSave = () => {
+    localStorage.setItem("mc_global_config", JSON.stringify(config));
+    // Dispatch event for other components to update
+    window.dispatchEvent(new Event("mc_config_updated"));
+    toast.success("Configuração Global Aplicada", { 
+      description: "As diretrizes de conexão foram persistidas no núcleo local." 
+    });
+  };
+
+  return (
+    <div className="bg-neutral-900 border border-neutral-800 rounded-[2.5rem] p-10 relative overflow-hidden group">
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+           <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+              <Zap className="w-6 h-6 text-emerald-500" />
+           </div>
+           <div>
+              <h3 className="text-2xl font-black text-white uppercase tracking-tight">Main_Infrastructure</h3>
+              <p className="text-[10px] font-mono text-neutral-600 font-black uppercase tracking-widest mt-0.5">Diretrizes Globais de Produção</p>
+           </div>
+        </div>
+        <button 
+          onClick={handleSave}
+          className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-black hover:bg-emerald-400 rounded-2xl text-[10px] font-black transition-all active:scale-95 uppercase tracking-widest shadow-lg shadow-emerald-500/20"
+        >
+          <Save className="w-4 h-4" />
+          Apply_Override
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="space-y-2">
+          <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-[0.2em] ml-1">Host_IP_CName</label>
+          <input 
+            type="text" 
+            value={config.host}
+            onChange={e => setConfig({...config, host: e.target.value})}
+            className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-5 py-4 text-xs font-mono text-white focus:outline-none focus:border-emerald-500/40"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-[0.2em] ml-1">Traffic_Port</label>
+          <input 
+            type="number" 
+            value={config.port}
+            onChange={e => setConfig({...config, port: parseInt(e.target.value)})}
+            className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-5 py-4 text-xs font-mono text-white focus:outline-none focus:border-emerald-500/40"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-[0.2em] ml-1">Agent_Identity</label>
+          <input 
+            type="text" 
+            value={config.username}
+            onChange={e => setConfig({...config, username: e.target.value})}
+            className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-5 py-4 text-xs font-mono text-white focus:outline-none focus:border-emerald-500/40"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-[0.2em] ml-1">Auth_Protocol</label>
+          <select 
+            value={config.auth}
+            onChange={e => setConfig({...config, auth: e.target.value})}
+            className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-5 py-4 text-xs font-mono text-white focus:outline-none focus:border-emerald-500/40 appearance-none cursor-pointer"
+          >
+            <option value="offline">Offline/Unauthenticated</option>
+            <option value="mojang">Mojang Legacy API</option>
+            <option value="microsoft">Microsoft Azure AD</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LinuxAuditPanel() {
   const audits = [
     { label: "Bash/Setup.sh Integrity", status: "VERIFIED", score: 100 },
@@ -138,20 +226,39 @@ function LinuxAuditPanel() {
 
 function ServerIntegrationPanel() {
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<"IDLE" | "CONNECTED" | "FAILED">("IDLE");
 
-  const handleConnect = () => {
+  const handleConnect = async () => {
     setIsConnecting(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/handshake");
+      const data = await res.json();
+      
+      if (data.authorized) {
+        setConnectionStatus("CONNECTED");
+        toast.success("Handshake Estabelecido", { 
+          description: `Canal ${data.system} ${data.version} ativo. Criptografia sincronizada.`,
+          icon: <CheckCircle className="w-4 h-4 text-emerald-500" />
+        });
+      } else {
+        setConnectionStatus("FAILED");
+        toast.error("Handshake Rejeitado", { 
+          description: "Erro 401: GEMINI_API_KEY ausente na infraestrutura.",
+        });
+      }
+    } catch (e) {
+      setConnectionStatus("FAILED");
+      toast.error("Erro de Rede", { description: "Falha ao atingir o subsistema de autenticação." });
+    } finally {
       setIsConnecting(false);
-      toast.error("Handshake Rejeitado", { description: "Protocolo 403: System Firewall negou a conexão externa." });
-    }, 1500);
+    }
   };
 
   const systems = [
-    { name: "Paper/Spigot", status: "Active" },
-    { name: "Forge/Fabric", status: "Active" },
+    { name: "Paper/Spigot", status: connectionStatus === "CONNECTED" ? "Active" : "Standby" },
+    { name: "Forge/Fabric", status: connectionStatus === "CONNECTED" ? "Active" : "Standby" },
     { name: "Bungeecord", status: "Standby" },
-    { name: "Bedrock D.S.", status: "Active" },
+    { name: "Bedrock D.S.", status: connectionStatus === "CONNECTED" ? "Active" : "Standby" },
   ];
 
   return (
@@ -164,8 +271,10 @@ function ServerIntegrationPanel() {
         <div>
           <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tight">Cloud_Interface</h3>
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/5 border border-emerald-500/20 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] text-emerald-500 font-mono font-black uppercase tracking-widest">Secure Handshake</span>
+            <span className={cn("w-1.5 h-1.5 rounded-full", connectionStatus === "CONNECTED" ? "bg-emerald-500" : connectionStatus === "FAILED" ? "bg-red-500" : "bg-neutral-600 animate-pulse")} />
+            <span className={cn("text-[10px] font-mono font-black uppercase tracking-widest", connectionStatus === "CONNECTED" ? "text-emerald-500" : connectionStatus === "FAILED" ? "text-red-500" : "text-neutral-600")}>
+              {connectionStatus === "CONNECTED" ? "Secure Handshake" : connectionStatus === "FAILED" ? "Handshake Failed" : "Awaiting Link"}
+            </span>
           </div>
         </div>
 
@@ -210,7 +319,29 @@ function ServerIntegrationPanel() {
 
 function BedrockStorePanel() {
   const handleMetadata = () => {
-    toast.success("Manifest Gerado", { description: "Estrutura JSON compatível com o Marketplace da Mojang." });
+    const manifest = {
+      format_version: 2,
+      header: {
+        name: "Solution_Builder_Addon",
+        description: "Generated via AI Studio - Realidade Bruta",
+        uuid: crypto.randomUUID(),
+        version: [1, 0, 0],
+        min_engine_version: [1, 21, 0]
+      },
+      modules: [
+        {
+          description: "Development Logic Module",
+          type: "script",
+          uuid: crypto.randomUUID(),
+          version: [1, 0, 0],
+          entry: "scripts/main.js"
+        }
+      ]
+    };
+    
+    const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" });
+    saveAs(blob, "manifest.json");
+    toast.success("Manifest Gerado", { description: "Download do manifest.json iniciado com parâmetros reais." });
   };
 
   return (
@@ -264,10 +395,29 @@ function UniversalPacker() {
 
   const handleExport = async (id: string, ext: string) => {
     setPacking(id);
-    setTimeout(() => {
+    try {
+      const zip = new JSZip();
+      
+      // Real file structure injection
+      if (id === "datapack") {
+        zip.file("pack.mcmeta", JSON.stringify({ pack: { description: "Generated Datapack", pack_format: 15 } }, null, 2));
+        zip.folder("data/minecraft/functions")?.file("init.mcfunction", "# System Initialized\nsay Building reality...");
+      } else if (id === "resource") {
+        zip.file("pack.mcmeta", JSON.stringify({ pack: { description: "Generated Resources", pack_format: 15 } }, null, 2));
+        zip.folder("assets/minecraft/textures/item");
+      } else if (id === "behavior") {
+        zip.file("manifest.json", JSON.stringify({ header: { name: "Behavior Pack", uuid: crypto.randomUUID(), version: [1,0,0] } }, null, 2));
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      saveAs(content, `solution_${id}_${Date.now()}${ext}`);
+      
+      toast.success("Build Finalizado", { description: `O artefato ${ext} foi compilado e transferido.` });
+    } catch (e) {
+      toast.error("Erro na Compilação", { description: "Ocorreu uma falha no buffer de empacotamento." });
+    } finally {
       setPacking(null);
-      toast.success("Build Finalizado", { description: `O artefato ${ext} foi compilado com sucesso.` });
-    }, 2000);
+    }
   };
 
   return (

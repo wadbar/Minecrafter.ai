@@ -25,8 +25,9 @@ const Integrations = lazy(() => import("./components/Integrations"));
 const CloudVault = lazy(() => import("./components/CloudVault"));
 const SystemSettings = lazy(() => import("./components/SystemSettings"));
 const ScriptHub = lazy(() => import("./components/ScriptHub"));
+const VoxelLab = lazy(() => import("./components/VoxelLab"));
 
-export type ViewState = "dashboard" | "map" | "mod" | "texture" | "skin" | "storyteller" | "scripthub" | "integrations" | "vault" | "settings";
+export type ViewState = "dashboard" | "map" | "mod" | "texture" | "skin" | "storyteller" | "scripthub" | "integrations" | "vault" | "settings" | "voxellab";
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>("dashboard");
@@ -56,16 +57,19 @@ export default function App() {
         const res = await fetch("/api/health");
         const data = await res.json();
         
-        let memoryLoad = 22;
-        let cpuLoad = 42;
+        let memoryLoad = 0;
+        let cpuLoad = 0;
         
         if (data.memory) {
-          memoryLoad = Math.floor((data.memory.heapUsed / data.memory.heapTotal) * 100);
+          memoryLoad = parseInt(data.memory.load);
+          if (data.memory.system) {
+             cpuLoad = data.memory.system.cpuLoad;
+          }
         }
         
         setTelemetry(prev => ({
           ...prev,
-          cpu: 40 + Math.floor(Math.random() * 5),
+          cpu: cpuLoad || (40 + Math.floor(Math.random() * 5)),
           load: memoryLoad
         }));
       } catch (err) {
@@ -192,6 +196,7 @@ export default function App() {
               {currentView === "texture" && <TextureGenerator />}
               {currentView === "skin" && <SkinGenerator />}
               {currentView === "storyteller" && <StorytellerGenerator />}
+              {currentView === "voxellab" && <VoxelLab />}
               {currentView === "scripthub" && <ScriptHub />}
               {currentView === "integrations" && <Integrations />}
               {currentView === "vault" && <CloudVault />}

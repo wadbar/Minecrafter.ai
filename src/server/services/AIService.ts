@@ -91,23 +91,28 @@ export class AIService {
   async generateImage(prompt: string, aspectRatio: string = "1:1"): Promise<string> {
     const safePrompt = this.sanitize(prompt);
     return this.circuitBreaker.execute(async () => {
-      // Imagen 3 requires specific model
-      const response = await ai.models.generateImages({
-        model: "imagen-3.0-generate-002",
-        prompt: safePrompt,
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-image-preview",
+        contents: { parts: [{ text: safePrompt }] },
         config: {
-          numberOfImages: 1,
-          outputMimeType: "image/png",
-          aspectRatio: aspectRatio,
+          imageConfig: {
+            aspectRatio: (aspectRatio as any) || "1:1",
+            imageSize: "1K"
+          }
         }
       });
-      // Return base64 data URI
-      const base64Bytes = response.generatedImages?.[0]?.image?.imageBytes;
-      if (!base64Bytes) throw new Error("A geração de imagem falhou.");
-      return `data:image/png;base64,${base64Bytes}`;
+
+      // Extract image from parts
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData?.data) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
+      
+      throw new Error("A geração de imagem falhou: Nenhuma imagem nos candidatos.");
     });
   }
 }
 
 export const aiService = new AIService();
-export const fastAiService = new AIService("gemini-3-flash-preview");
+export const fastAiService = new AIService("gemini-3.5-flash");

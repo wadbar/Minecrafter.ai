@@ -135,12 +135,25 @@ export default function MapGenerator() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showDeployment, setShowDeployment] = useState(false);
   const [deployLoading, setDeployLoading] = useState(false);
-  const [deployConfig, setDeployConfig] = useState({
-    host: "localhost",
-    port: 25565,
-    username: "Player_Agent",
-    auth: "offline" as "offline" | "mojang" | "microsoft"
+  const [deployConfig, setDeployConfig] = useState(() => {
+    const saved = localStorage.getItem("mc_global_config");
+    return saved ? JSON.parse(saved) : {
+      host: "localhost",
+      port: 25565,
+      username: "Player_Agent",
+      auth: "offline" as "offline" | "mojang" | "microsoft"
+    };
   });
+
+  // Listen for config updates from Integrations
+  React.useEffect(() => {
+    const syncConfig = () => {
+      const saved = localStorage.getItem("mc_global_config");
+      if (saved) setDeployConfig(JSON.parse(saved));
+    };
+    window.addEventListener("mc_config_updated", syncConfig);
+    return () => window.removeEventListener("mc_config_updated", syncConfig);
+  }, []);
   const [currentResult, setCurrentResult] = useState("");
 
   // Persistence - State Recovery Logic

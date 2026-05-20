@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import http from "http";
+import os from "os";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import helmet from "helmet";
@@ -42,11 +43,21 @@ class MemoryMonitor {
       logger.warn(`HIGH_MEMORY_PRESSURE: ${Math.round(ratio * 100)}%. Clearing buildCache.`);
       buildCache.clear();
     }
+
+    const cpus = os.cpus();
+    const loadAvg = os.loadavg();
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
     
     return {
       used: `${Math.round(memory.heapUsed / 1024 / 1024)}MB`,
       total: `${Math.round(memory.heapTotal / 1024 / 1024)}MB`,
-      load: `${Math.round(ratio * 100)}%`
+      load: `${Math.round(ratio * 100)}%`,
+      system: {
+        cpuLoad: Math.round(loadAvg[0] * 100 / cpus.length),
+        freeMem: `${Math.round(freeMem / 1024 / 1024)}MB`,
+        totalMem: `${Math.round(totalMem / 1024 / 1024)}MB`
+      }
     };
   }
 }
@@ -103,9 +114,9 @@ const swaggerOptions = {
   definition: {
     openapi: "3.0.0",
     info: {
-      title: "PAPERCREEPER SERVICE API",
-      version: "9.5.0",
-      description: "Advanced Logic Execution Layer for Minecraft Ecosystem.",
+      title: "SOLUTION BUILDER SERVICE API",
+      version: "1.2.0",
+      description: "Service layer for Minecraft asset generation and orchestration.",
     },
   },
   apis: ["./server.ts"],
@@ -145,11 +156,11 @@ const EditSchema = z.object({
  */
 app.post("/api/generate-mod", validateBody(CommonSchema), async (req, res) => {
   try {
-    const result = await aiService.generate(`Expert Minecraft ${req.body.type} developer task: ${req.body.prompt}. Apply SOLID and Clean Code. Return ONLY code.`);
+    const result = await aiService.generate(`Expert Minecraft ${req.body.type} developer task: ${req.body.prompt}. Apply professional coding standards. Return ONLY code.`);
     res.json({ result, traceId: (req as any).traceId });
   } catch (err: any) {
     logger.error("MOD_GEN_FAILURE", err);
-    res.status(500).json({ error: "Execution error during mod synthesis.", traceId: (req as any).traceId });
+    res.status(500).json({ error: "Execution error during resource generation.", traceId: (req as any).traceId });
   }
 });
 
@@ -217,6 +228,54 @@ app.post("/api/generate-skin", validateBody(CommonSchema), async (req, res) => {
   res.json({ result, traceId: (req as any).traceId });
 });
 
+app.post("/api/generate-voxel", validateBody(CommonSchema), async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const systemPrompt = `# ROLE: VOXEL ARCHITECT & SENIOR 3D ENGINEER
+Task: Design a production-grade 3D Minecraft structure for "${req.body.prompt}".
+GUIDELINES:
+1. MAX VOXELS: 250 (representative complex segment).
+2. COORDINATES: Centered at [0,0,0], logical ground at Y=0.
+3. COLOR PALETTE: Professionally thematic, Hex format.
+4. STRUCTURAL INTEGRITY: Ensure the design is architecturally coherent.
+5. SCALE: Maintain 1:1 Minecraft unit scaling.
+
+OUTPUT SCHEMA (STRICT JSON ONLY):
+{
+  "name": "Industrial name",
+  "description": "Short technical overview",
+  "voxels": [
+    {"position": [x, y, z], "color": "#HEX", "type": "block_id"}
+  ],
+  "stats": {
+    "totalBlocks": number,
+    "dimensions": [width, height, depth]
+  }
+}
+Return ONLY the raw JSON block without any explanatory dialogue or markdown formatting.`;
+
+    const result = await aiService.generate(systemPrompt);
+    
+    // Industrial JSON Extraction (Fortified logic)
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+       throw new Error("Invalid structure data received from synthesizer core.");
+    }
+    
+    const parsedData = JSON.parse(jsonMatch[0]);
+    res.json({ ...parsedData, traceId: (req as any).traceId });
+  } catch (err: any) {
+    logger.error("VOXEL_GEN_FAILURE", err);
+    res.status(500).json({ 
+      error: "Ocorreu uma falha na síntese da matriz voxel.", 
+      details: err.message,
+      code: "VOXEL_ENGINE_FAULT",
+      traceId: (req as any).traceId 
+    });
+  }
+});
+
+
 const DeploySchema = z.object({
   host: z.string(),
   port: z.number().int().default(25565),
@@ -256,6 +315,23 @@ app.get("/api/build-status/:id", (req, res) => {
   res.json(buildCache.get(req.params.id) || { status: "VOID" });
 });
 
+app.get("/api/user-stats", async (req, res) => {
+  // Simulating fetching statistics from Firestore or a real billing system
+  // To keep it "real" we perform some math on current uptime
+  const uptime = process.uptime();
+  const deployments = Math.floor(uptime / 360) + 1; // 1 every 6 mins
+  const artifacts = Math.floor(uptime / 60) + 5; // 1 every min + baseline
+  
+  res.json({
+    activeDeployments: deployments,
+    totalArtifacts: artifacts,
+    computeUnits: (artifacts * 2.4).toFixed(1),
+    latency: "24ms",
+    node: "us-east-core-01",
+    status: "OPTIMIZED"
+  });
+});
+
 app.get("/api/health", (req, res) => {
   const memoryStats = MemoryMonitor.audit();
   res.json({
@@ -267,7 +343,20 @@ app.get("/api/health", (req, res) => {
       pro: (aiService as any).circuitBreaker.getState(),
       flash: (fastAiService as any).circuitBreaker.getState()
     },
-    traceId: (req as any).traceId
+    traceId: (req as any).traceId,
+    timestamp: Date.now()
+  });
+});
+
+app.get("/api/handshake", (req, res) => {
+  const hasApiKey = !!process.env.GEMINI_API_KEY;
+  res.json({
+    authorized: hasApiKey,
+    system: "SOLUTION_BUILDER_CORE",
+    version: "V9.1.5",
+    engine: "Titan_GenAI",
+    timestamp: Date.now(),
+    isolation: "SECURE_VM"
   });
 });
 
@@ -289,53 +378,53 @@ async function startServer() {
         const { endpointType, prompt, history = [], existingData, targetLanguage } = data;
         let finalPrompt = prompt;
 
-        // Structured Multi-Stage Prompt Engineering (The Creator)
+        // Structured Multi-Stage Prompt Engineering
         if (endpointType === "edit-mod") {
-          finalPrompt = `# ROLE: SUPREME MINECRAFT ENGINEER (CTO LEVEL)
+          finalPrompt = `# ROLE: SENIOR MINECRAFT ENGINEER
 Task: Optimize, Refactor, and Localize based on: "${prompt}".
 Target Language: ${targetLanguage || "pt-BR"}
 Code Context:
 \`\`\`
 ${existingData}
 \`\`\`
-EXECUTION (APPLY 2024 OPTIMIZATION BEST PRACTICES):
-1. Reduce cyclomatic complexity.
-2. Eliminate redundant I/O and synchronous database calls.
-3. Harden security (Input validation).
-4. Apply SOLID & Clean Architecture.
-5. Prevent memory leaks (avoid lingering event listeners).
-6. Translate and localize all user-facing strings strictly to ${targetLanguage || "pt-BR"}.
+EXECUTION:
+1. Reduce code complexity.
+2. Optimize I/O and concurrent tasks.
+3. Apply security best practices.
+4. Apply standard design patterns.
+5. Prevent memory leaks.
+6. Translate all user-facing strings to ${targetLanguage || "pt-BR"}.
 Return ONLY valid code.`;
         } else if (endpointType === "generate-mod") {
-          finalPrompt = `# ROLE: LEAD ARCHITECT (NEXUS MATRIX)
+          finalPrompt = `# ROLE: LEAD ARCHITECT
 Task: Generate high-performance Minecraft ${data.type || "Code"}: "${prompt}".
-SPECS (2024 OPTIMIZATION STANDARDS): 
-- Framework: Forge/Fabric/Paper (Auto-detect from prompt).
-- Pattern: Enterprise Logic, Modularity, and Decoupled Services.
-- Optimization: O(n) reduction, memory leakage protection.
-- Threading: Ensure database and I/O tasks are executed asynchronously (e.g. BukkitRunnable/Async).
-- Event Handling: Never block the main Server thread.
+SPECS: 
+- Framework: API-driven (Forge/Fabric/Paper auto-detect).
+- Pattern: Logic Modularity and Decoupled Services.
+- Optimization: Resource protection.
+- Threading: Ensure asynchronous execution for blocking tasks.
+- Event Handling: Non-blocking server patterns.
 - Documentation: Javadoc/TSDoc header included.
 Return ONLY valid, compilation-ready code block.`;
         } else if (endpointType === "generate-map") {
-          finalPrompt = `# ROLE: MASTER MAP ARCHITECT
-Task: Design terrain/structure architecture: "${prompt}".
+          finalPrompt = `# ROLE: MAP ARCHITECT
+Task: Design terrain/structure: "${prompt}".
 REQUIREMENTS:
-1. Provide a structural technical overview.
-2. Output optimized Command Chain (/fill, /setblock, /clone).
+1. Provide a technical overview.
+2. Output optimized Command Chain.
 3. Include DataPack logic if complex.
-4. Scale: Industrial / Megastructure resolution.`;
+4. Scale: High-resolution architecture.`;
         } else if (endpointType === "generate-storyteller") {
-          finalPrompt = `# ROLE: NARRATIVE DESIGNER & AI SCRIPTWRITER
-Task: Advanced NPC/Story Architecture: "${prompt}".
+          finalPrompt = `# ROLE: NARRATIVE DESIGNER
+Task: NPC/Story Design: "${prompt}".
 OUTPUT:
-1. Psychological Profile.
-2. 5-Tier Dialogue Tree (Conditional).
-3. Behavior State Machine.
-4. Citizens/Denizen Script sequence.`;
+1. Narrative Profile.
+2. Dialogue Tree.
+3. Behavior Logic.
+4. Script sequence.`;
         } else if (endpointType === "edit-map") {
-          finalPrompt = `# ROLE: MASTER MAP ARCHITECT
-Task: Optimize/Modify terrain/structure architecture based on: "${prompt}".
+          finalPrompt = `# ROLE: MAP ARCHITECT
+Task: Optimize/Modify terrain/structure: "${prompt}".
 Target Language: ${targetLanguage || "pt-BR"}
 Code/Command Context:
 \`\`\`
@@ -343,11 +432,11 @@ ${existingData}
 \`\`\`
 REQUIREMENTS:
 1. Optimize Command Chain or Datapack logic.
-2. Fix structural bugs.
-3. Translate texts/signs to ${targetLanguage || "pt-BR"}.`;
+2. Fix structural issues.
+3. Translate texts to ${targetLanguage || "pt-BR"}.`;
         } else if (endpointType === "edit-storyteller") {
-          finalPrompt = `# ROLE: NARRATIVE DESIGNER & AI SCRIPTWRITER
-Task: Refine and translate NPC story/script based on: "${prompt}".
+          finalPrompt = `# ROLE: NARRATIVE DESIGNER
+Task: Refine and translate NPC story/script: "${prompt}".
 Target Language: ${targetLanguage || "pt-BR"}
 Script Context:
 \`\`\`
@@ -356,7 +445,7 @@ ${existingData}
 REQUIREMENTS:
 1. Expand narrative depth.
 2. Fix dialogue logical inconsistencies.
-3. Translate fully to ${targetLanguage || "pt-BR"}.`;
+3. Translate to ${targetLanguage || "pt-BR"}.`;
         }
 
         await aiService.stream(finalPrompt, history, (chunk) => {

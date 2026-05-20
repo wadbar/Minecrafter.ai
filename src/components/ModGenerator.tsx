@@ -6,6 +6,7 @@ import "prismjs/components/prism-java";
 import "prismjs/components/prism-javascript";
 import { Loader2, Box, Layers, Sparkles, BookOpen, Download } from "lucide-react";
 import { saveArtifact } from "../lib/db";
+import { FrontLogger } from "../lib/logger";
 import { cn } from "../lib/utils";
 import { saveAs } from "file-saver";
 import { toast } from "sonner";
@@ -93,6 +94,12 @@ export default function ModGenerator() {
   const [version, setVersion] = useState("1.21");
   const [complexity, setComplexity] = useState("Standard");
   const [loadingDocs, setLoadingDocs] = useState(false);
+  const [telemetryLogs, setTelemetryLogs] = useState<{id: string, msg: string, type: 'info' | 'warn' | 'success'}[]>([]);
+
+  const addLog = useCallback((msg: string, type: 'info' | 'warn' | 'success' = 'info') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setTelemetryLogs(prev => [{id, msg, type}, ...prev].slice(0, 7));
+  }, []);
 
   useEffect(() => {
     setLoadingDocs(true);
@@ -103,19 +110,20 @@ export default function ModGenerator() {
   }, [framework, version]);
 
   const generateMod = useCallback(async (prompt: string, existingData?: string, targetLanguage?: string) => {
+    addLog(`Iniciando pipeline de ${existingData ? 'otimização' : 'geração'}...`, "info");
     try {
       const isEditMode = !!existingData;
       const endpoint = isEditMode ? "/api/edit-mod" : "/api/generate-mod";
       
-      // Prompt Blindado (Supreme V9 Standard)
+      // Prompt Optimization
       const systemContext = `
-# ROLE: Senior Minecraft Systems Engineer (V9)
+# ROLE: Senior Minecraft Systems Engineer
 # CONTEXT: ${framework.toUpperCase()} | Version: ${version}
 # QUALITY: ${complexity}
 # CONSTRAINTS:
 - Use only valid API methods for ${version}.
 - Ensure thread safety (use Async tasks for I/O).
-- Apply SOLID principles.
+- Apply standard design patterns.
 - If Java, ensure the class is public and follows naming conventions.
 - If version is 1.21+, use Data Components instead of NBT if applicable for ${framework}.
 `;
@@ -128,13 +136,32 @@ export default function ModGenerator() {
         ? { prompt: finalPrompt, existingData, targetLanguage }
         : { prompt: finalPrompt, type: `${framework}-plugin` };
 
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      addLog(`Transmitindo requisição para ${endpoint}...`, "info");
+      
+      let res;
+      try {
+        res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          throw new Error(`Servidor indisponível (Status: ${res.status})`);
+        }
+      } catch (fetchErr: any) {
+        FrontLogger.error("API Request Failure", { endpoint, error: fetchErr.message });
+        addLog(`Erro de conexão: ${fetchErr.message}`, "warn");
+        throw fetchErr;
+      }
+
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (data.error) {
+        FrontLogger.warn("AI Generation Error", { error: data.error });
+        throw new Error(data.error);
+      }
+
+      addLog("Resposta recebida e validada.", "success");
 
       // Clean up markdown ticks if Gemini provides them
       let code = data.result || "";
@@ -148,6 +175,8 @@ export default function ModGenerator() {
     }
     return code;
     } catch (error: any) {
+      FrontLogger.error("Mod Generation Failure", { error: error.message });
+      addLog(`Falha técnica: ${error.message}`, "warn");
       toast.error("Erro no Processamento", { description: error?.message || "Ocorreu uma falha na IA." });
       throw error;
     }
@@ -204,7 +233,7 @@ export default function ModGenerator() {
       // Metadata Generation Logic
       const apiVersion = version.split(".").slice(0, 2).join("."); // e.g., 1.21.1 -> 1.21
       const description = `Minecraft ${cleanFramework} mod: ${className}. Generated via AI Studio. Target: ${version}.`;
-      const author = "AI_Nexus_Generator";
+      const author = "AI_Solution_Generator";
 
       if (framework === "spigot" || framework === "paper") {
         const pluginYml = [
@@ -430,10 +459,39 @@ export default function ModGenerator() {
       supportsEditing={true}
       extraControls={controls}
       renderOutput={(result, isGenerating) => {
-        if (isGenerating) {
-          return <Loader2 className="w-8 h-8 animate-spin text-sky-500 mx-auto mt-20" />;
-        }
-        return <OutputWrapper result={result} onDownload={() => handleDownloadJar(result)} />;
+        return (
+          <div className="space-y-6">
+            {/* Telemetry Logs Display */}
+            {telemetryLogs.length > 0 && (
+              <div className="bg-neutral-900/40 border border-neutral-800 rounded-xl p-3 font-mono text-[9px] space-y-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center justify-between mb-2 text-neutral-600 border-b border-neutral-800 pb-1">
+                  <span className="font-black uppercase tracking-widest">SRE_Telemetry</span>
+                  <span className="text-[7px]">Orchestrator v1.4</span>
+                </div>
+                {telemetryLogs.map((log) => (
+                  <div key={log.id} className="flex gap-2">
+                    <span className="text-neutral-700">[{new Date().toLocaleTimeString()}]</span>
+                    <span className={cn(
+                      "font-bold uppercase tracking-tight",
+                      log.type === 'info' ? 'text-sky-500' : log.type === 'success' ? 'text-emerald-500' : 'text-amber-500'
+                    )}>
+                      {log.type === 'info' ? '>>' : log.type === 'success' ? 'OK' : '!!'} {log.msg}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isGenerating ? (
+              <div className="py-20 text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-sky-500 mx-auto mb-4" />
+                <p className="text-[10px] font-mono text-sky-500 uppercase tracking-[0.3em] animate-pulse">Compiling Logic...</p>
+              </div>
+            ) : (
+              <OutputWrapper result={result} onDownload={() => handleDownloadJar(result)} />
+            )}
+          </div>
+        );
       }}
     />
   );

@@ -1,6 +1,6 @@
 import React, { memo } from "react";
 import { ViewState } from "../App";
-import { Brain, Sparkles, Map, FileCode2, Paintbrush, Users, Store, Shirt, Database, Activity, Cpu, Zap, Server, Terminal } from "lucide-react";
+import { Brain, Sparkles, Map, FileCode2, Paintbrush, Users, Store, Shirt, Database, Activity, Cpu, Zap, Server, Terminal, BarChart3, Box } from "lucide-react";
 import { motion } from "motion/react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -11,18 +11,20 @@ interface Props {
 export default function Dashboard({ setCurrentView }: Props) {
   const [sessionGens, setSessionGens] = React.useState(0);
   const [uptime, setUptime] = React.useState(0);
+  const [userStats, setUserStats] = React.useState<any>(null);
   
   const [chartData, setChartData] = React.useState<any[]>([]);
 
   const [recentLogs, setRecentLogs] = React.useState([
-    { time: "18:04:12", type: "OK", typeColor: "text-emerald-500", msg: "Logic Link Stable" },
-    { time: "18:04:15", type: "INFO", typeColor: "text-sky-500", msg: "System Bootstrap" },
-    { time: "18:05:01", type: "SYS", typeColor: "text-emerald-500", msg: "Memory Purge" },
-    { time: "18:06:44", type: "WARN", typeColor: "text-amber-500", msg: "High Token Density" },
-    { time: "18:07:22", type: "OK", typeColor: "text-emerald-500", msg: "Log: 42MB Released" }
+    { time: "18:04:12", type: "OK", typeColor: "text-emerald-500", msg: "Service Link Stable" },
+    { time: "18:04:15", type: "INFO", typeColor: "text-sky-500", msg: "Environment Bootstrap" },
+    { time: "18:05:01", type: "SYS", typeColor: "text-emerald-500", msg: "Buffer Purge" },
+    { time: "18:06:44", type: "WARN", typeColor: "text-amber-500", msg: "High Resource Usage" },
+    { time: "18:07:22", type: "OK", typeColor: "text-emerald-500", msg: "Log: Cleanup Complete" }
   ]);
 
   React.useEffect(() => {
+    let active = true;
     setSessionGens(Number(localStorage.getItem("session_gens") || "0"));
     
     setChartData(Array.from({ length: 20 }).map((_, i) => ({
@@ -32,9 +34,34 @@ export default function Dashboard({ setCurrentView }: Props) {
     })));
 
     const startTime = Date.now();
+
+    // Verification Handshake
+    fetch("/api/handshake")
+      .then(r => r.json())
+      .then(data => {
+        if (active) {
+          const now = new Date();
+          const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+          setRecentLogs(prev => [
+            { time, type: "SYS", typeColor: "text-violet-500", msg: `Titan_Engine Link ${data.authorized ? "ESTABLISHED" : "REJECTED"}` },
+            ...prev.slice(0, 4)
+          ]);
+        }
+      });
+
+    // Fetch User Stats
+    const fetchStats = async () => {
+      try {
+        const r = await fetch("/api/user-stats");
+        const d = await r.json();
+        if (active) setUserStats(d);
+      } catch (e) {}
+    };
+    fetchStats();
     
     const logInterval = setInterval(() => {
-      const msgs = ["Subroutine optimized.", "Recompiling shaders...", "Awaiting telemetry.", "Workers ready.", "Syncing nodes...", "Calculation finished.", "Anomaly detected... bypassed.", "Purging dangling refs.", "System nominal."];
+      if (!active) return;
+      const msgs = ["Lógica otimizada.", "Refinando ativos...", "Aguardando telemetria.", "Workers inicializados.", "Sincronizando nós...", "Ciclo finalizado.", "Caso especial tratado.", "Limpeza de recursos.", "Operacional."];
       const types = [ { t: "OK", c: "text-emerald-500" }, { t: "INFO", c: "text-sky-500" }, { t: "DB", c: "text-amber-500" }, { t: "SYS", c: "text-emerald-500" }, { t: "SEC", c: "text-violet-500" } ];
       
       const rMsg = msgs[Math.floor(Math.random() * msgs.length)];
@@ -51,34 +78,41 @@ export default function Dashboard({ setCurrentView }: Props) {
     }, 4500);
 
     const interval = setInterval(async () => {
-      setUptime(Math.floor((Date.now() - startTime) / 1000));
+      if (!active) return;
       
       try {
         const res = await fetch("/api/health");
         const data = await res.json();
         
+        if (data.uptime) setUptime(data.uptime);
+
         let memoryPercent = 0;
-        let cpuSim = 10 + Math.random() * 35; // Express CPU usage is tricky without OS libs, simulate based on fluctuation
+        let cpuLoad = 0;
+        
         if (data.memory) {
-          const used = data.memory.heapUsed / 1024 / 1024;
-          const total = data.memory.heapTotal / 1024 / 1024;
+          const used = parseInt(data.memory.used);
+          const total = parseInt(data.memory.total);
           memoryPercent = (used / total) * 100;
+          
+          if (data.memory.system) {
+            cpuLoad = data.memory.system.cpuLoad;
+          }
         }
 
         setChartData((prev) => {
           return [...prev.slice(1), { 
             time: prev[prev.length - 1].time + 1,
-            cpu: cpuSim,
+            cpu: cpuLoad || (10 + Math.random() * 5), // Real load with minimal jitter if 0
             memory: memoryPercent,
           }];
         });
       } catch (err) {
-        // Fallback smooth flatline if backend disconnects
         setChartData((prev) => [...prev.slice(1), { time: prev[prev.length - 1].time + 1, cpu: 0, memory: 0 }]);
       }
     }, 2500); 
     
     return () => {
+       active = false;
        clearInterval(interval);
        clearInterval(logInterval);
     };
@@ -103,30 +137,75 @@ export default function Dashboard({ setCurrentView }: Props) {
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 relative z-10">
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-4">
-             <div className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-black uppercase tracking-[0.2em] rounded">Operational</div>
+             <div className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-black uppercase tracking-[0.2em] rounded">Operacional</div>
              <div className="px-2 py-0.5 bg-neutral-900 border border-neutral-800 text-neutral-500 text-[10px] font-black uppercase tracking-[0.2em] rounded">v1.2.0-STABLE</div>
           </div>
           <h1 className="text-5xl md:text-7xl font-black tracking-tighter text-white uppercase italic">
-            Minecraft<span className="text-emerald-500">Builder</span> <span className="text-neutral-700 font-light not-italic">x Minecrafter.AI</span>
+            Minecraft<span className="text-emerald-500">Builder</span> <span className="text-neutral-700 font-light not-italic">x Titan Engine</span>
           </h1>
           <p className="text-lg text-neutral-400 max-w-2xl font-bold leading-tight uppercase tracking-tight">
-            Advanced Software Engineering Suite. Orchestrating Minecrafter.AI assets for local environments.
+            Suíte de Engenharia de Minecraft. Orquestrando ativos de IA em ambientes de alta performance.
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 bg-neutral-950 border border-neutral-900 rounded-xl min-w-[140px]">
-             <div className="text-[10px] font-mono text-neutral-600 uppercase mb-1">Session_Uptime</div>
+          <div className="p-4 bg-neutral-950 border border-neutral-900 rounded-xl min-w-[140px] group hover:border-emerald-500/30 transition-all">
+             <div className="text-[10px] font-mono text-neutral-600 uppercase mb-1">Tempo_Ativo</div>
              <div className="text-xl font-bold text-white font-mono">{(uptime / 60).toFixed(1)}m</div>
           </div>
-          <div className="p-4 bg-neutral-950 border border-neutral-900 rounded-xl min-w-[140px]">
-             <div className="text-[10px] font-mono text-neutral-600 uppercase mb-1">Total_Gens</div>
-             <div className="text-xl font-bold text-white font-mono">{sessionGens}</div>
+          <div className="p-4 bg-neutral-950 border border-neutral-900 rounded-xl min-w-[140px] group hover:border-sky-500/30 transition-all">
+             <div className="text-[10px] font-mono text-neutral-600 uppercase mb-1">Gerações_Totais</div>
+             <div className="text-xl font-bold text-white font-mono">{userStats?.totalArtifacts || sessionGens}</div>
           </div>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-neutral-800 rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl">
+      {userStats && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10"
+        >
+          <div className="bg-neutral-900/40 border border-neutral-800 p-6 rounded-2xl flex items-center gap-4 group hover:bg-neutral-900/60 transition-all">
+            <div className="p-3 bg-emerald-500/10 rounded-xl">
+              <Zap className="w-6 h-6 text-emerald-500" />
+            </div>
+            <div>
+              <p className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Unidades_Cálculo</p>
+              <p className="text-xl font-black text-white">{userStats.computeUnits} U</p>
+            </div>
+          </div>
+          <div className="bg-neutral-900/40 border border-neutral-800 p-6 rounded-2xl flex items-center gap-4 group hover:bg-neutral-900/60 transition-all">
+            <div className="p-3 bg-sky-500/10 rounded-xl">
+              <Activity className="w-6 h-6 text-sky-500" />
+            </div>
+            <div>
+              <p className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Latência_Core</p>
+              <p className="text-xl font-black text-white">{userStats.latency}</p>
+            </div>
+          </div>
+          <div className="bg-neutral-900/40 border border-neutral-800 p-6 rounded-2xl flex items-center gap-4 group hover:bg-neutral-900/60 transition-all">
+            <div className="p-3 bg-amber-500/10 rounded-xl">
+              <BarChart3 className="w-6 h-6 text-amber-500" />
+            </div>
+            <div>
+              <p className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Carga_Execução</p>
+              <p className="text-xl font-black text-white">NOMINAL</p>
+            </div>
+          </div>
+          <div className="bg-neutral-900/40 border border-neutral-800 p-6 rounded-2xl flex items-center gap-4 group hover:bg-neutral-900/60 transition-all">
+            <div className="p-3 bg-violet-500/10 rounded-xl">
+              <Server className="w-6 h-6 text-violet-500" />
+            </div>
+            <div>
+              <p className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Nó_Primário</p>
+              <p className="text-xl font-black text-white">{userStats.node}</p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-neutral-800 rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl relative z-10">
         <DashboardCard
           title="Mapas e Terrenos"
           description="Geração de megastruturas e topografia via Command Chains."
@@ -142,6 +221,14 @@ export default function Dashboard({ setCurrentView }: Props) {
           onClick={() => setCurrentView("mod")}
           delay={0.2}
           color="sky"
+        />
+        <DashboardCard
+          title="Laboratório Voxel"
+          description="Inspeção 3D e prototipagem de estruturas complexas."
+          icon={Box}
+          onClick={() => setCurrentView("voxellab")}
+          delay={0.22}
+          color="emerald"
         />
         <DashboardCard
           title="Script Factory"

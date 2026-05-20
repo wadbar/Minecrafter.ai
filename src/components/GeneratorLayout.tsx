@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Send, Mic, Loader2, StopCircle, RefreshCw, FileEdit, Plus, Globe, CloudUpload, Copy } from "lucide-react";
 import Markdown from "react-markdown";
 import { cn } from "../lib/utils";
@@ -49,6 +49,7 @@ export default React.memo(function GeneratorLayout({
   const [manualResult, setManualResult] = useState("");
   
   const { user, signIn } = useAuth();
+  const lastGeneratedPromptRef = useRef("");
 
   const type = mode === "edit" && endpointType ? "edit-" + endpointType.split("-")[1] : endpointType || "generate-mod";
 
@@ -90,6 +91,14 @@ export default React.memo(function GeneratorLayout({
          const clean = prev.filter(p => p.parts[0].text !== "Generation Complete");
          return [...clean, { role: "model", parts: [{ text: result }] }];
        });
+
+       // Auto-save to Cloud Vault if logged in
+       if (user && onSaveCloud) {
+         const artifactTitle = `${title} [${mode === "create" ? "GEN" : "OPT"}]: ${lastGeneratedPromptRef.current.slice(0, 25)}...`;
+         onSaveCloud(artifactTitle, result).catch(() => {
+           console.warn("Auto-save to vault failed.");
+         });
+       }
     }
   }, [isGenerating, result, error]);
 
@@ -104,6 +113,7 @@ export default React.memo(function GeneratorLayout({
     setManualResult("");
     
     const currentPrompt = prompt;
+    lastGeneratedPromptRef.current = currentPrompt;
     setChatHistory(prev => [...prev, { role: "user", parts: [{ text: currentPrompt }] }]);
     setPrompt("");
 
@@ -123,6 +133,14 @@ export default React.memo(function GeneratorLayout({
         setChatHistory(prev => {
            return [...prev, { role: "model", parts: [{ text: generatedResult }] }];
         });
+
+        // Auto-save for manual generation
+        if (user && onSaveCloud) {
+          const titleText = `${title} [${mode === "create" ? "GEN" : "OPT"}]: ${currentPrompt.slice(0, 25)}...`;
+          onSaveCloud(titleText, generatedResult).catch(() => {
+            console.warn("Auto-save to vault failed.");
+          });
+        }
       } catch (err: any) {
         toast.error("Falha na Geração", { description: err.message });
       } finally {
