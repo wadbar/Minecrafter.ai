@@ -206,11 +206,8 @@ export default function ScriptHub() {
         {/* Output Header */}
         <div className="flex items-center justify-between bg-neutral-900/50 px-4 py-2 rounded-xl border border-neutral-800/50">
           <div className="flex items-center gap-3">
-             <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/10 text-emerald-500 rounded text-[9px] font-bold uppercase border border-emerald-500/20">
-               <Cpu className="w-3 h-3" /> System_Core
-             </div>
-             <span className="text-[10px] font-mono text-neutral-500 tracking-tighter">
-               VIRTUAL_BUFFER: {Math.round(finalResult.length / 1024 * 100) / 100} KB
+             <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
+               Código Gerado
              </span>
           </div>
           <div className="flex items-center gap-2">
@@ -234,58 +231,21 @@ export default function ScriptHub() {
             <button 
               onClick={() => {
                 navigator.clipboard.writeText(finalResult);
-                toast.success("Copiado!", { description: "Buffer transferido para a área de transferência." });
+                toast.success("Copiado!");
               }}
               className="p-1.5 text-neutral-400 hover:text-white transition-colors" 
-              title="Copy Code"
+              title="Copiar Código"
             >
               <Copy className="w-4 h-4" />
-            </button>
-            <button 
-              onClick={() => toast.info("Simulação de Execução iniciada...")}
-              className="p-1.5 text-emerald-500 hover:text-emerald-400 transition-colors" 
-              title="Execute Local"
-            >
-              <Play className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
-          <div className="lg:col-span-2 relative group flex flex-col">
-             <div className="absolute inset-0 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl pointer-events-none group-hover:border-emerald-500/20 transition-all" />
-             <pre className="flex-1 p-6 overflow-auto custom-scrollbar font-mono text-sm leading-relaxed text-emerald-400 whitespace-pre-wrap">
-               {finalResult}
-             </pre>
-             <div className="absolute bottom-4 left-4 pointer-events-none text-[8px] font-mono text-emerald-500/30 uppercase">
-               Terminal_Output_Ready
-             </div>
-          </div>
-
-          <div className="bg-black/60 border border-neutral-800 rounded-2xl p-4 font-mono text-[10px] flex flex-col gap-2 overflow-hidden shadow-inner">
-             <div className="flex items-center gap-2 text-neutral-500 border-b border-neutral-800 pb-2 mb-2">
-                <Terminal className="w-3 h-3" />
-                <span className="uppercase font-black text-[9px] tracking-widest">Runtime_Logs</span>
-             </div>
-             <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar pr-2">
-                <div className="text-emerald-500 font-bold uppercase tracking-widest">[SYSTEM] Core Online.</div>
-                <div className="text-neutral-500">[INFO] Connection: Stable</div>
-                <div className="text-neutral-500">[INFO] Engine: Automation Core v4.37</div>
-                <div className="text-sky-500 font-black">[NET] Port 3000 Ingress Verified.</div>
-                <div className="h-px bg-neutral-900 my-2" />
-                {isGenerating && (
-                  <>
-                    <div className="text-amber-500 animate-pulse">[WARN] High execution load...</div>
-                    <div className="text-neutral-600">[DEBUG] Buffer Alloc: 512KB</div>
-                    <div className="text-neutral-600 font-mono text-[8px]">0x{Math.random().toString(16).substr(2, 8).toUpperCase()} - Writing Chunk...</div>
-                  </>
-                )}
-                {finalResult && !isGenerating && (
-                  <div className="text-emerald-500 font-black italic shadow-[0_0_10px_rgba(16,185,129,0.3)]">[DEPLOY_READY] Logic materialized.</div>
-                )}
-                <div className="text-neutral-800 italic animate-pulse">... monitoring active runtime hooks ...</div>
-             </div>
-          </div>
+        <div className="relative group flex flex-col flex-1 min-h-0">
+           <div className="absolute inset-0 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl pointer-events-none group-hover:border-emerald-500/20 transition-all" />
+           <pre className="flex-1 p-6 overflow-auto custom-scrollbar font-mono text-sm leading-relaxed text-emerald-400 whitespace-pre-wrap">
+             {finalResult}
+           </pre>
         </div>
       </div>
     );

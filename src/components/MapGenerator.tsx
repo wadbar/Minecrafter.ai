@@ -134,7 +134,6 @@ export default function MapGenerator() {
   const [complexity, setComplexity] = useState(50);
   const [density, setDensity] = useState(50);
   const [verticality, setVerticality] = useState(50);
-  const [cacheStats, setCacheStats] = useState({ hits: 0, status: "Idle", size: 0, history: [] as boolean[] });
   const [isProcessing, setIsProcessing] = useState(false);
   const [showDeployment, setShowDeployment] = useState(false);
   const [deployLoading, setDeployLoading] = useState(false);
@@ -193,8 +192,7 @@ export default function MapGenerator() {
 
   const handleClearCache = () => {
     chunkCache.current.clear();
-    setCacheStats(prev => ({ ...prev, hits: 0, size: 0, history: [], status: "Purge Complete" }));
-    toast.success("Cache Purged", { description: "Local cache has been cleared." });
+    toast.success("Cache Limpo");
   };
 
   const copyToClipboard = (text: string) => {
@@ -235,7 +233,7 @@ export default function MapGenerator() {
 
   const generateMap = useCallback(async (prompt: string, existingData?: string, targetLanguage?: string) => {
      if (isProcessing) {
-       toast.warning("Neural Link Busy", { description: "Please wait for the current stream to stabilize." });
+       toast.warning("Sistema Ocupado", { description: "Aguarde a estabilização do fluxo atual." });
        return "";
      }
 
@@ -249,11 +247,6 @@ export default function MapGenerator() {
      const trimmedPrompt = prompt.trim();
      if (!isEditMode && lastPromptRef.current && lastPromptRef.current !== trimmedPrompt) {
         chunkCache.current.clear();
-        setCacheStats(prev => ({ 
-          ...prev, 
-          status: "System Purged (New Intent Detected)", 
-          size: 0 
-        }));
      }
      if (!isEditMode) {
        lastPromptRef.current = trimmedPrompt;
@@ -261,20 +254,12 @@ export default function MapGenerator() {
 
      const cachedResult = chunkCache.current.get(cacheKey);
      if (!isEditMode && cachedResult) {
-        setCacheStats(prev => ({ 
-          ...prev, 
-          hits: prev.hits + 1, 
-          status: "Loaded from LRU Cache", 
-          size: chunkCache.current.size,
-          history: [...prev.history, true].slice(-20)
-        }));
         setCurrentResult(cachedResult);
         return cachedResult;
      }
 
      try {
        setIsProcessing(true);
-       setCacheStats(prev => ({ ...prev, status: "Generating New Chunks..." }));
 
        const body = isEditMode 
          ? { prompt: contextPrompt, existingData, targetLanguage }
@@ -289,14 +274,14 @@ export default function MapGenerator() {
          });
 
          if (!res.ok) {
-           let errorMessage = `Nexus Error: ${res.status}`;
+           let errorMessage = `Erro Nexus: ${res.status}`;
            try {
              const errorData = await res.json();
              if (errorData.error) errorMessage = errorData.error;
            } catch {
-             if (res.status === 400) errorMessage = "Prompt rejection: The matrix cannot process this request structure.";
-             if (res.status === 429) errorMessage = "Neural link saturated: Too many requests. Wait for cooldown.";
-             if (res.status >= 500) errorMessage = "Core system failure: Server-side architecture is unstable.";
+             if (res.status === 400) errorMessage = "Rejeição de Prompt: A matriz não pôde processar este pedido.";
+             if (res.status === 429) errorMessage = "Link saturado: Aguarde o cooldown.";
+             if (res.status >= 500) errorMessage = "Falha crítica: Arquitetura instável.";
            }
            throw new Error(errorMessage);
          }
@@ -305,12 +290,6 @@ export default function MapGenerator() {
          const result = OfflineEngine.generateMap(prompt, activePreset, { complexity, density, verticality });
          if (!isEditMode) {
            chunkCache.current.set(cacheKey, result);
-           setCacheStats(prev => ({ 
-             ...prev, 
-             status: "Offline Result Optimized", 
-             size: chunkCache.current.size,
-             history: [...prev.history, false].slice(-20)
-           }));
          }
          setIsProcessing(false);
          addHistory(prompt, result, { engine, version, complexity, density, verticality, activePreset });
@@ -323,12 +302,6 @@ export default function MapGenerator() {
 
        if (!isEditMode) {
          chunkCache.current.set(cacheKey, data.result);
-         setCacheStats(prev => ({ 
-           ...prev, 
-           status: "Chunks Cached Successfully", 
-           size: chunkCache.current.size,
-           history: [...prev.history, false].slice(-20)
-         }));
        }
 
        setIsProcessing(false);
@@ -337,11 +310,6 @@ export default function MapGenerator() {
        return data.result;
      } catch (error: any) {
        setIsProcessing(false);
-       setCacheStats(prev => ({ 
-         ...prev, 
-         status: "Signal Lost (Error)",
-         history: [...prev.history, false].slice(-20)
-       }));
        throw error;
      }
   }, [engine, version, isProcessing, activePreset, complexity, density, verticality, addHistory]);
@@ -471,54 +439,8 @@ export default function MapGenerator() {
             </div>
           ))}
       </div>
-      
-      {/* Visualizador de Cache do Terreno */}
-      <div className="flex items-center justify-between bg-m3-surface-container/40 p-4 rounded-3xl border border-m3-outline-variant/60 mt-3 shadow-inner">
-        <div className="flex items-center gap-3">
-          <Database className={cn("w-4 h-4 transition-colors", cacheStats.hits > 0 ? "text-m3-primary" : "text-m3-on-surface-variant/40")} />
-          <span className="uppercase tracking-[0.15em] font-black text-m3-on-surface-variant text-[9px] opacity-70">Sistema LRU Cache</span>
-          
-          {/* Hit History Sparkline */}
-          <div className="flex items-center gap-1 ml-4 h-4">
-             {cacheStats.history.map((hit, i) => (
-               <div 
-                 key={i} 
-                 className={cn(
-                   "w-1.5 h-full rounded-full transition-all duration-700",
-                   hit ? "bg-m3-primary shadow-m3-1" : "bg-m3-on-surface-variant/10"
-                 )} 
-                 style={{ height: hit ? '100%' : '40%' }}
-               />
-             ))}
-             {cacheStats.history.length === 0 && (
-               <div className="text-[9px] text-m3-on-surface-variant/40 italic">Aguardando operações...</div>
-             )}
-          </div>
-        </div>
-        <div className="flex items-center gap-6">
-           <div className="flex flex-col items-end">
-              <span className="text-[8px] uppercase font-black opacity-40">Status_Link</span>
-              <span className={cn("font-black text-[10px]", cacheStats.status.includes("Loaded") ? "text-m3-primary" : cacheStats.status.includes("Invalidate") || cacheStats.status.includes("Purge") ? "text-m3-error" : "text-m3-secondary")}>{cacheStats.status}</span>
-           </div>
-           <div className="w-px h-6 bg-m3-outline-variant" />
-           <div className="flex flex-col items-center">
-              <span className="text-[8px] uppercase font-black opacity-40">Setores</span>
-              <span className="text-m3-on-surface font-black text-[10px]">{cacheStats.size}/5</span>
-           </div>
-           <div className="flex flex-col items-center">
-              <span className="text-[8px] uppercase font-black opacity-40">Hits</span>
-              <span className="text-m3-primary font-black text-[10px]">{cacheStats.hits}</span>
-           </div>
-           <button 
-             onClick={handleClearCache}
-             className="ml-2 px-4 py-1.5 bg-m3-error-container text-m3-on-error-container text-[9px] font-black border border-m3-error/20 rounded-full uppercase transition-all hover:bg-m3-error/10 hover:border-m3-error/40 active:scale-95"
-           >
-             Purgar Cache
-           </button>
-        </div>
-      </div>
     </div>
-  ), [engine, version, cacheStats, complexity, density, verticality, activePreset]);
+  ), [engine, version, complexity, density, verticality, activePreset]);
 
   const renderOutput = useCallback((result: string, isGenerating: boolean) => {
     if (isGenerating) {
@@ -528,7 +450,7 @@ export default function MapGenerator() {
             <Loader2 className="w-12 h-12 animate-spin text-m3-primary" />
             <div className="absolute inset-0 blur-xl bg-m3-primary/20 animate-pulse" />
           </div>
-          <p className="text-[11px] font-black text-m3-primary animate-pulse uppercase tracking-[0.4em]">{cacheStats.status}</p>
+          <p className="text-[11px] font-black text-m3-primary animate-pulse uppercase tracking-[0.4em]">GERANDO ESTRUTURA...</p>
         </div>
       );
     }
@@ -647,7 +569,7 @@ export default function MapGenerator() {
           </div>
       </div>
     );
-  }, [cacheStats]);
+  }, []);
 
   return (
     <GeneratorLayout

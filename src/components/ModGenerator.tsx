@@ -99,11 +99,6 @@ export default function ModGenerator() {
   const [boilerplateOnly, setBoilerplateOnly] = useState(false);
   const [activeTab, setActiveTab] = useState<"code" | "history">("code");
   const [loadingDocs, setLoadingDocs] = useState(false);
-  const [telemetryLogs, setTelemetryLogs] = useState<{id: string, msg: string, type: 'info' | 'warn' | 'success'}[]>([]);
-
-  const addLog = useCallback((msg: string, type: 'info' | 'warn' | 'success' = 'info') => {
-    setTelemetryLogs(prev => [{ id: Math.random().toString(36), msg, type }, ...prev].slice(0, 10));
-  }, []);
 
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
@@ -116,7 +111,6 @@ export default function ModGenerator() {
   }, []);
 
   const generateMod = useCallback(async (prompt: string, existingData?: string, targetLanguage?: string) => {
-    addLog(`Iniciando pipeline de ${existingData ? 'otimização' : 'geração'}...`, "info");
     try {
       const isEditMode = !!existingData;
       const endpoint = isEditMode ? "/api/edit-mod" : "/api/generate-mod";
@@ -145,8 +139,6 @@ export default function ModGenerator() {
       const body = isEditMode 
         ? { prompt: finalPrompt, existingData, targetLanguage }
         : { prompt: finalPrompt, type: `${framework}-plugin` };
-
-      addLog(`Transmitindo requisição para ${endpoint}...`, "info");
       
       let res;
       let data;
@@ -166,18 +158,14 @@ export default function ModGenerator() {
         if (data.error) throw new Error(data.error);
       } catch (fetchErr: any) {
         FrontLogger.error("API Request Failure", { endpoint, error: fetchErr.message });
-        addLog(`Erro de conexão: ${fetchErr.message}. Ativando Offline Engine.`, "warn");
         
         const { OfflineEngine } = await import("../services/OfflineEngine");
         const fallbackCode = OfflineEngine.generateMod(prompt, framework as any);
-        addLog("Gerado via Procedural Fallback.", "success");
         
         addHistory(prompt, fallbackCode, { framework, version, complexity });
         setCurrentCode(fallbackCode);
         return fallbackCode;
       }
-
-      addLog("Resposta recebida e validada.", "success");
 
       // Clean up markdown ticks if Gemini provides them
       let code = data.result || "";
@@ -195,7 +183,6 @@ export default function ModGenerator() {
       return code;
     } catch (error: any) {
       FrontLogger.error("Mod Generation Failure", { error: error.message });
-      addLog(`Falha técnica: ${error.message}`, "warn");
       toast.error("Erro no Processamento", { description: error?.message || "Ocorreu uma falha na IA." });
       throw error;
     }
@@ -565,27 +552,6 @@ export default function ModGenerator() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Telemetry Logs Display */}
-                {telemetryLogs.length > 0 && (
-                  <div className="bg-neutral-900/40 border border-neutral-800 rounded-xl p-3 font-mono text-[9px] space-y-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                    <div className="flex items-center justify-between mb-2 text-neutral-600 border-b border-neutral-800 pb-1">
-                      <span className="font-black uppercase tracking-widest">SRE_Telemetry</span>
-                      <span className="text-[7px]">Orchestrator v1.4</span>
-                    </div>
-                    {telemetryLogs.map((log) => (
-                      <div key={log.id} className="flex gap-2">
-                        <span className="text-neutral-700">[{new Date().toLocaleTimeString()}]</span>
-                        <span className={cn(
-                          "font-bold uppercase tracking-tight",
-                          log.type === 'info' ? 'text-sky-500' : log.type === 'success' ? 'text-emerald-500' : 'text-amber-500'
-                        )}>
-                          {log.type === 'info' ? '>>' : log.type === 'success' ? 'OK' : '!!'} {log.msg}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
                 {isGenerating && !finalResult ? (
                   <div className="py-20 text-center">
                     <Loader2 className="w-8 h-8 animate-spin text-sky-500 mx-auto mb-4" />

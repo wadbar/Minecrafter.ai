@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import GeneratorLayout from "./GeneratorLayout";
-import { Loader2, Maximize, Layout, Wand2, Grid3X3, Image as ImageIcon, Mic, ChevronLeft, ChevronRight, BookOpen, RotateCcw, RotateCw, Cloud, Download, Trash2 } from "lucide-react";
+import { Loader2, Maximize, Layout, Wand2, Grid3X3, Image as ImageIcon, Mic, ChevronLeft, ChevronRight, BookOpen, RotateCcw, RotateCw, Cloud, Download, Trash2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { saveArtifact } from "../lib/db";
@@ -41,6 +41,27 @@ export default function TextureGenerator() {
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const [currentImage, setCurrentImage] = useState("");
+
+  const uvValidation = useMemo(() => {
+    const standards = [16, 32, 64, 128, 256, 512];
+    const isSquare = width === height;
+    const isStandardRes = standards.includes(width) && standards.includes(height);
+    const isStandardRatio = aspectRatio === "1:1";
+
+    if (!isSquare || !isStandardRes || !isStandardRatio) {
+      let issues = [];
+      if (!isSquare) issues.push("Não é quadrada");
+      if (!isStandardRes) issues.push("Resolução não padrão");
+      if (!isStandardRatio) issues.push("Proporção incorreta");
+
+      return {
+        isValid: false,
+        issues,
+        suggestion: "Use 16x16, 32x32 ou 64x64 com proporção 1:1."
+      };
+    }
+    return { isValid: true };
+  }, [width, height, aspectRatio]);
 
   const generateTexture = useCallback(async (prompt: string) => {
     // Inject pixel art constraints for low resolutions
@@ -302,16 +323,59 @@ export default function TextureGenerator() {
             </div>
           </motion.div>
           
-          <div className="flex items-center gap-6 bg-m3-surface-container-low border border-m3-outline-variant p-4 px-8 rounded-full shadow-m3-2">
-            <div className="flex flex-col items-center">
-               <span className="text-[9px] text-m3-on-surface-variant font-black uppercase tracking-widest opacity-50">Resolução</span>
-               <span className="text-sm font-black text-m3-on-surface tracking-widest">{width}×{height}</span>
+          <div className="flex flex-col gap-4 w-full items-center">
+            <div className="flex items-center gap-6 bg-m3-surface-container-low border border-m3-outline-variant p-4 px-8 rounded-full shadow-m3-2 overflow-hidden">
+              <div className="flex flex-col items-center">
+                 <span className="text-[9px] text-m3-on-surface-variant font-black uppercase tracking-widest opacity-50">Resolução</span>
+                 <span className="text-sm font-black text-m3-on-surface tracking-widest">{width}×{height}</span>
+              </div>
+              <div className="w-px h-8 bg-m3-outline-variant" />
+              <div className="flex flex-col items-center">
+                 <span className="text-[9px] text-m3-on-surface-variant font-black uppercase tracking-widest opacity-50">Formato</span>
+                 <span className="text-sm font-black text-m3-secondary tracking-widest">{aspectRatio}</span>
+              </div>
+              <div className="w-px h-8 bg-m3-outline-variant" />
+              <div className="flex flex-col items-center min-w-[100px]">
+                 <span className="text-[9px] text-m3-on-surface-variant font-black uppercase tracking-widest opacity-50">Padrão UV</span>
+                 <div className="flex items-center gap-2 mt-0.5">
+                   {uvValidation.isValid ? (
+                     <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="flex items-center gap-1.5">
+                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                       <span className="text-[10px] font-black text-emerald-500 uppercase">Válido</span>
+                     </motion.div>
+                   ) : (
+                     <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="flex items-center gap-1.5">
+                       <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                       <span className="text-[10px] font-black text-amber-500 uppercase">Ajustar</span>
+                     </motion.div>
+                   )}
+                 </div>
+              </div>
             </div>
-            <div className="w-px h-8 bg-m3-outline-variant" />
-            <div className="flex flex-col items-center">
-               <span className="text-[9px] text-m3-on-surface-variant font-black uppercase tracking-widest opacity-50">Formato</span>
-               <span className="text-sm font-black text-m3-secondary tracking-widest">{aspectRatio}</span>
-            </div>
+
+            {!uvValidation.isValid && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-amber-500/10 border border-amber-500/20 p-3 px-6 rounded-2xl flex items-start gap-4 max-w-md animate-in fade-in"
+              >
+                <div className="bg-amber-500 rounded-full p-1 mt-0.5">
+                  <AlertTriangle className="w-3 h-3 text-white" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black text-amber-600 uppercase tracking-wider">Aviso de Padrão Minecraft</span>
+                  <p className="text-[11px] text-amber-700/80 font-medium leading-relaxed">
+                    {uvValidation.issues.join(", ")}. {uvValidation.suggestion}
+                  </p>
+                  <button 
+                    onClick={() => applyPreset(16, 16)}
+                    className="mt-1 text-[9px] font-black text-amber-600 hover:text-amber-700 text-left underline uppercase tracking-widest"
+                  >
+                    Auto-Corrigir para 16×16
+                  </button>
+                </div>
+              </motion.div>
+            )}
           </div>
         </div>
       );

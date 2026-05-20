@@ -37,7 +37,6 @@ export default function SkinGenerator() {
   const [externalCapeUrl, setExternalCapeUrl] = useState("");
   const [skinInputError, setSkinInputError] = useState(false);
   const [capeInputError, setCapeInputError] = useState(false);
-  const [telemetryLogs, setTelemetryLogs] = useState<{id: string, msg: string, type: 'info' | 'warn' | 'success'}[]>([]);
   const [isSavingCloud, setIsSavingCloud] = useState(false);
 
 
@@ -68,11 +67,6 @@ export default function SkinGenerator() {
       setIsSavingCloud(false);
     }
   };
-
-  const addLog = useCallback((msg: string, type: 'info' | 'warn' | 'success' = 'info') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setTelemetryLogs(prev => [{id, msg, type}, ...prev].slice(0, 8));
-  }, []);
 
   // Validation Logic for External Assets
   React.useEffect(() => {
@@ -173,8 +167,6 @@ export default function SkinGenerator() {
 
     try {
       setIsProcessing(true);
-      setTelemetryLogs([]);
-      addLog(`Initializing Generation Pipeline (Mode: ${compilationMode.toUpperCase()})...`, "info");
       
       setLastBasePrompt(activePrompt);
       
@@ -191,8 +183,6 @@ export default function SkinGenerator() {
         customColor: bypassParams?.customColor ?? customColor,
       };
 
-      addLog("Constructing transformation parameters...", "info");
-      
       const enhancedPrompt = `Minecraft 64x64 skin template texture for: ${activePrompt}. 
 Execution Parameters:
 - Complexity: ${config.detailLevel}% 
@@ -210,9 +200,6 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
       };
 
       if (!navigator.onLine) {
-        addLog("Network connection lost. Activating Standalone Engine.", "warn");
-        addLog("Executing mapping via Procedural Core.", "info");
-        
         const result = OfflineEngine.generateSkin(enhancedPrompt, { 
           detailLevel: config.detailLevel, 
           colorIntensity: config.colorIntensity,
@@ -224,12 +211,9 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
         
         setCurrentSkinUrl(result);
         updateHistory(result);
-        addLog("Skin synthesized locally.", "success");
         return result;
       }
 
-      addLog("Transmitting request to Remote Cluster...", "info");
-      
       let res;
       let data;
       try {
@@ -254,7 +238,6 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
         data = await res.json();
         if (data.error) throw new Error(data.error);
       } catch(e: any) {
-        addLog(`Remote generation unavailable (${e.message}). Triggering Offline Procedural Engine.`, "warn");
         const result = OfflineEngine.generateSkin(enhancedPrompt, { 
           detailLevel: config.detailLevel, 
           colorIntensity: config.colorIntensity,
@@ -266,34 +249,26 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
         
         setCurrentSkinUrl(result);
         updateHistory(result);
-        addLog("Skin synthesized locally via fallback.", "success");
         setIsProcessing(false);
         return result;
       }
       
-      addLog("Assets received. Finalizing mapping.", "info");
       setCurrentSkinUrl(data.result);
       updateHistory(data.result);
-      addLog("Synthesis confirmed.", "success");
 
       // ARTIFACT_PERSISTENCE: Archiving Artifact to CloudVault
       if (user) {
         try {
-          // Attempting deep archival of the generated artifact
           await saveArtifact('skin', `Skin Forge [${config.modelType.toUpperCase()}]: ${activePrompt.slice(0, 30)}...`, data.result, config);
-          addLog("Artifact persisted to Cloud Vault.", "success");
         } catch (e) {
-          addLog("Cloud persistence offline. Local buffer only.", "warn");
+          // Silent fail for persistence
         }
       }
 
       return data.result;
 
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        addLog("Process Aborted.", "warn");
-      } else {
-        addLog(`Pipeline Fault: ${error?.message || "Fault"}`, "warn");
+      if (error.name !== 'AbortError') {
         toast.error("Falha ao gerar skin", { description: error?.message || "Erro na conexão com o sistema." });
       }
       throw error;
@@ -811,26 +786,6 @@ Architecture: Traditional 2D Minecraft layout (64x64). High-fidelity pixel art.`
                     Arraste para Girar • Scroll para Zoom
                  </div>
                </div>
-
-               {telemetryLogs.length > 0 && (
-                 <div className="w-full max-w-[400px] bg-m3-surface-container-low border border-m3-outline-variant rounded-2xl p-4 font-mono text-[10px] space-y-2 overflow-hidden animate-in fade-in slide-in-from-bottom-2 shadow-inner">
-                   <div className="flex items-center justify-between mb-2 text-m3-on-surface-variant border-b border-m3-outline-variant pb-2">
-                     <span className="font-black uppercase tracking-widest text-[9px]">Audit_Telemetria</span>
-                     <span className="text-[8px] opacity-60">Status: ATIVO</span>
-                   </div>
-                   {telemetryLogs.map((log) => (
-                     <div key={log.id} className="flex gap-2 animate-in slide-in-from-left-2">
-                       <span className="text-m3-on-surface-variant/40">[{new Date().toTimeString().split(' ')[0]}]</span>
-                       <span className={cn(
-                         "font-bold uppercase tracking-tight",
-                         log.type === 'info' ? 'text-m3-secondary' : log.type === 'success' ? 'text-m3-primary' : 'text-m3-error'
-                       )}>
-                         {log.type === 'info' ? '>>' : log.type === 'success' ? 'OK' : '!!'} {log.msg}
-                       </span>
-                     </div>
-                   ))}
-                 </div>
-               )}
 
                <div className="flex flex-col gap-3 w-full max-w-[400px]">
                  <button
