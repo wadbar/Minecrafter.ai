@@ -39,7 +39,7 @@
 }
 
 @layer base {
-  :root {
+  body {
     /* MD3 Base Theme (Light) */
     --primary: #6750A4;
     --on-primary: #FFFFFF;

@@ -40,10 +40,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme, updateResolvedTheme]);
 
   useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
-    root.classList.add(resolvedTheme);
-    root.setAttribute('data-theme', resolvedTheme);
+    const body = window.document.body;
+    body.classList.remove('light', 'dark');
+    body.classList.add(resolvedTheme);
+    body.setAttribute('data-theme', resolvedTheme);
     localStorage.setItem('app-theme', theme);
   }, [theme, resolvedTheme]);
 
