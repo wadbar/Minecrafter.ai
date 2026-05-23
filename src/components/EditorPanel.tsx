@@ -18,19 +18,19 @@ export default function EditorPanel({ existingData, setExistingData, targetLangu
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
         transition={{ duration: 0.3, type: "spring", stiffness: 300, damping: 25 }}
-        className="w-full md:w-1/3 flex flex-col gap-4 border border-m3-outline bg-m3-surface-container rounded-3xl p-6 backdrop-blur-md relative group shadow-m3-2"
+        className="m3-card w-full md:w-1/3 flex flex-col gap-4 relative group backdrop-blur-md"
       >
         <div className="absolute inset-0 bg-m3-primary/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-3xl pointer-events-none" />
         
         <div className="flex items-center justify-between z-10">
-          <div className="flex items-center gap-2 text-m3-primary font-bold text-xs uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-m3-on-surface font-bold text-xs uppercase tracking-wider">
             <Zap className="w-4 h-4 text-m3-primary" /> 
             Source_Ingest
           </div>
           <button 
             onClick={() => setExistingData("")}
             className={cn(
-              "p-2 rounded-full hover:bg-red-500/10 text-m3-on-surface-variant hover:text-red-400 transition-all shadow-m3-1 hover:shadow-m3-2 active:scale-95",
+              "m3-button-tonal p-2 min-w-0 px-2 h-8 text-m3-on-surface-variant hover:text-m3-on-surface hover:bg-m3-error-container",
               !existingData && "opacity-0 pointer-events-none"
             )}
             title="Purge Buffer"
@@ -44,11 +44,11 @@ export default function EditorPanel({ existingData, setExistingData, targetLangu
             value={existingData}
             onChange={(e) => setExistingData(e.target.value)}
             placeholder="Inject source code or raw data here for AI synthesis and structural optimization..."
-            className="flex-1 w-full bg-m3-surface-container-high border border-m3-outline-variant rounded-2xl p-5 text-m3-on-surface font-mono text-[11px] leading-relaxed focus:outline-none focus:border-m3-primary focus:ring-1 focus:ring-m3-primary/30 transition-all resize-none shadow-inner"
+            className="m3-input flex-1 font-mono text-[11px] leading-relaxed resize-none shadow-inner text-m3-on-surface placeholder:text-m3-on-surface-variant"
           />
-          <div className="absolute top-3 right-3 flex flex-col items-end gap-1 pointer-events-none opacity-40 group-hover:opacity-80 transition-opacity">
+          <div className="absolute top-3 right-3 flex flex-col items-end gap-1 pointer-events-none transition-opacity">
             <span className="text-[9px] font-bold text-m3-on-surface-variant uppercase">Buffer_v9.0</span>
-            <span className="text-[9px] font-mono text-m3-primary font-bold">{existingData.length} BITS</span>
+            <span className="text-[9px] font-mono text-m3-on-surface font-bold">{existingData.length} BITS</span>
           </div>
         </div>
 
@@ -63,7 +63,7 @@ export default function EditorPanel({ existingData, setExistingData, targetLangu
               type="text"
               value={targetLanguage}
               onChange={(e) => setTargetLanguage(e.target.value)}
-              className="w-full bg-m3-surface-container border border-m3-outline rounded-xl px-4 py-3 text-m3-on-surface focus:outline-none focus:border-m3-primary text-xs font-bold placeholder:text-m3-outline-variant transition-all hover:shadow-m3-1 focus:shadow-m3-2"
+              className="m3-input text-xs font-bold text-m3-on-surface placeholder:text-m3-on-surface-variant"
               placeholder="e.g., Python / Java / MD / JSON"
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-m3-primary animate-pulse shadow-[0_0_8px_rgba(var(--m3-primary-rgb),0.5)]" />

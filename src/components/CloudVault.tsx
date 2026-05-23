@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useMemo } from "react";
 import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/firebase";
-import { Loader2, Trash2, ExternalLink, Box, FileCode2, Map, Users, Paintbrush, Shirt, Zap, CheckCircle, Activity, Search, Filter, Cuboid, X, DownloadCloud, CheckSquare, Square } from "lucide-react";
+import { Loader2, Trash2, ExternalLink, Box, FileCode2, Map, Users, Paintbrush, Shirt, Zap, CheckCircle, Activity, Search, Filter, Cuboid, X, DownloadCloud, CheckSquare, Square, ChevronUp, ChevronDown } from "lucide-react";
 import Markdown from "react-markdown";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
@@ -57,7 +57,15 @@ export default function CloudVault() {
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [sortConfig, setSortConfig] = useState<{key: 'title' | 'type', direction: 'asc' | 'desc'}>({key: 'title', direction: 'asc'});
   const [selectedForBatch, setSelectedForBatch] = useState<Set<string>>(new Set());
+
+  const toggleSort = (key: 'title' | 'type') => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
   const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     try {
@@ -105,13 +113,21 @@ export default function CloudVault() {
   }, [user]);
 
   const filteredArtifacts = useMemo(() => {
-    return artifacts.filter(art => {
+    let filtered = artifacts.filter(art => {
       const matchesSearch = art.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                            art.content.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesType = activeFilter === "all" || art.type === activeFilter;
       return matchesSearch && matchesType;
     });
-  }, [artifacts, searchQuery, activeFilter]);
+
+    filtered.sort((a, b) => {
+      if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  }, [artifacts, searchQuery, activeFilter, sortConfig]);
 
   const handleTriggerBuild = async (art: Artifact) => {
     setIsCompiling(true);
@@ -220,7 +236,7 @@ export default function CloudVault() {
             Authenticate via ID to access the global robust artifact registry.
           </p>
         </div>
-        <button onClick={signIn} className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-white font-bold text-xs uppercase tracking-widest transition-all shadow-xl active:scale-95">
+        <button onClick={signIn} className="m3-button-filled px-8 py-3 w-max mx-auto shadow-xl">
           Execute_Auth_Login
         </button>
       </div>
@@ -355,7 +371,15 @@ export default function CloudVault() {
         {/* Sidebar Registry */}
         <div className="w-[380px] flex flex-col flex-none overflow-hidden">
            <div className="p-4 bg-black/40 border-b border-neutral-900 border-r border-neutral-900">
-              <div className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest font-bold">Asset_Manifest</div>
+              <div className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest font-bold mb-3">Asset_Manifest</div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => toggleSort('title')} className="flex items-center flex-1 justify-between p-2 rounded-lg bg-neutral-900/50 hover:bg-neutral-800 text-[10px] font-bold text-neutral-400 uppercase tracking-widest transition-colors">
+                  File Name {sortConfig.key === 'title' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3.5 h-3.5 bg-neutral-800 rounded text-white"/> : <ChevronDown className="w-3.5 h-3.5 bg-neutral-800 rounded text-white"/>)}
+                </button>
+                <button onClick={() => toggleSort('type')} className="flex items-center w-24 justify-between p-2 rounded-lg bg-neutral-900/50 hover:bg-neutral-800 text-[10px] font-bold text-neutral-400 uppercase tracking-widest transition-colors">
+                  Type {sortConfig.key === 'type' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3.5 h-3.5 bg-neutral-800 rounded text-white"/> : <ChevronDown className="w-3.5 h-3.5 bg-neutral-800 rounded text-white"/>)}
+                </button>
+              </div>
            </div>
            
            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
@@ -421,11 +445,11 @@ export default function CloudVault() {
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    {(selectedArtifact.type === "mod" || selectedArtifact.type === "map") && (
+                     {(selectedArtifact.type === "mod" || selectedArtifact.type === "map") && (
                       <button 
                          onClick={() => handleTriggerBuild(selectedArtifact)}
                          disabled={isCompiling}
-                         className="h-8 px-4 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 rounded border border-emerald-500/20 text-[10px] font-mono font-bold uppercase tracking-widest transition-all flex items-center gap-2"
+                         className="m3-button-tonal h-8 px-4"
                       >
                         {isCompiling ? <Activity className="w-3 h-3 animate-spin" /> : (buildStatus === "SUCCESS" ? <CheckCircle className="w-3 h-3" /> : <Zap className="w-3 h-3" />)}
                         {isCompiling ? "Compiling..." : buildStatus === "SUCCESS" ? "Manifest_Ready" : "Deploy_Build"}
@@ -433,7 +457,7 @@ export default function CloudVault() {
                     )}
                     <button 
                       onClick={() => handleDelete(selectedArtifact)}
-                      className="h-8 w-8 flex items-center justify-center bg-red-950/20 hover:bg-red-950/40 text-red-500 rounded border border-red-500/20 transition-all"
+                      className="m3-button-tonal h-8 w-8 px-0 text-m3-error hover:bg-m3-error-container"
                       title="Purge Artifact"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -449,7 +473,7 @@ export default function CloudVault() {
                         URL.revokeObjectURL(url);
                         toast.success("Binary exported successfully.");
                       }}
-                      className="h-8 px-4 bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white rounded border border-neutral-800 text-[10px] font-mono font-bold uppercase tracking-widest transition-all flex items-center gap-2"
+                      className="m3-button-tonal h-8 px-4"
                     >
                       <ExternalLink className="w-3 h-3" /> Export
                     </button>

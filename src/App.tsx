@@ -39,7 +39,7 @@ function AppContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [telemetry, setTelemetry] = useState({ cpu: 42, load: 22 });
-  const { theme, toggleTheme } = useTheme();
+  const { theme, resolvedTheme, toggleTheme } = useTheme();
   const { t, language, setLanguage } = useTranslation();
 
   useEffect(() => {
@@ -146,21 +146,21 @@ function AppContent() {
       />
       
       {/* M3 Header / Title Bar */}
-      <div className="h-10 bg-m3-surface text-m3-on-surface border-b border-m3-outline-variant flex items-center justify-between px-4 z-50 shrink-0 select-none">
-        <div className="flex items-center gap-4">
-          <div className="flex gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-500/40" />
-            <div className="w-2.5 h-2.5 rounded-full bg-amber-500/40" />
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/40" />
+      <div className="h-16 bg-m3-surface text-m3-on-surface shadow-m3-1 flex items-center justify-between px-6 z-50 shrink-0 select-none relative transition-colors duration-300">
+        <div className="flex items-center gap-6">
+          <div className="flex gap-2">
+            <div className="w-3 h-3 rounded-full bg-m3-error opacity-80 shadow-sm" />
+            <div className="w-3 h-3 rounded-full bg-amber-500 opacity-80 shadow-sm" />
+            <div className="w-3 h-3 rounded-full bg-emerald-500 opacity-80 shadow-sm" />
           </div>
-          <div className="h-4 w-px bg-m3-outline-variant" />
-          <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">{t.common.industrialSolutions}</span>
+          <div className="h-6 w-[2px] bg-m3-outline-variant/50 rounded-full" />
+          <span className="text-[11px] font-black uppercase tracking-[0.2em] opacity-80 text-m3-primary">{t.common.industrialSolutions}</span>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button 
             onClick={() => setLanguage(language === "en" ? "pt" : "en")}
-            className="flex items-center justify-center min-h-[48px] min-w-[48px] gap-2 p-1.5 px-3 rounded-full hover:bg-m3-surface-variant text-m3-on-surface-variant transition-colors group"
+            className="flex items-center justify-center min-h-[48px] min-w-[48px] gap-2 rounded-full hover:bg-m3-surface-variant text-m3-on-surface-variant transition-colors group focus:outline-none focus:ring-2 focus:ring-m3-primary/30 active:scale-95"
             title={language === "en" ? "Translate to Portuguese" : "Traduzir para Inglês"}
           >
             <Languages className="w-5 h-5 group-hover:rotate-12 transition-transform" />
@@ -168,19 +168,19 @@ function AppContent() {
           </button>
           <button 
             onClick={toggleTheme}
-            className="flex items-center justify-center min-h-[48px] min-w-[48px] p-1.5 rounded-full hover:bg-m3-surface-variant text-m3-on-surface-variant transition-colors"
+            className="flex items-center justify-center min-h-[48px] min-w-[48px] rounded-full hover:bg-m3-surface-variant text-m3-on-surface-variant transition-colors focus:outline-none focus:ring-2 focus:ring-m3-primary/30 active:scale-95"
           >
-            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            {theme === 'system' ? <span className="text-[10px] uppercase font-bold tracking-widest text-m3-primary">AUTO</span> : resolvedTheme === 'dark' ? <Sun className="w-5 h-5 transition-transform" /> : <Moon className="w-5 h-5 transition-transform" />}
           </button>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-m3-secondary-container text-m3-on-secondary-container rounded-full text-[10px] font-bold uppercase tracking-tight ml-2">
-             <div className="w-1.5 h-1.5 rounded-full bg-m3-primary animate-pulse" />
+          <div className="flex items-center gap-2 px-4 py-2 bg-m3-secondary-container text-m3-on-secondary-container rounded-full text-[10px] font-bold uppercase tracking-tight ml-4 shadow-m3-1">
+             <div className="w-2 h-2 rounded-full bg-m3-primary animate-pulse shadow-[0_0_8px_rgba(var(--m3-primary-rgb),0.5)]" />
              <span>Core v3.1.0</span>
           </div>
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden relative">
-        <Toaster theme={theme as any} position="bottom-right" closeButton richColors />
+        <Toaster theme={resolvedTheme as any} position="bottom-right" closeButton richColors />
         <Sidebar
           isOpen={sidebarOpen}
           setIsOpen={setSidebarOpen}

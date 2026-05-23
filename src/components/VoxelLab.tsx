@@ -39,8 +39,48 @@ const voxelTemplates = [
 
 // --- 3D Components ---
 
-function StaticVoxelModel({ voxels, wireframe }: { voxels: Voxel[], wireframe: boolean }) {
+function StaticVoxelModel({ voxels, wireframe, optimization = 0 }: { voxels: Voxel[], wireframe: boolean, optimization: number }) {
   const groupRef = useRef<THREE.Group>(null);
+
+  const optimizedVoxels = useMemo(() => {
+    if (optimization === 0 || voxels.length === 0) {
+      return voxels.map(v => ({ position: v.position, scale: [0.95, 0.95, 0.95] as [number, number, number], color: v.color, type: v.type }));
+    }
+    
+    // Grouping by y, z
+    // The optimization value acts as max length of merged block (e.g. 100 => up to 10 blocks)
+    let maxW = Math.max(2, Math.ceil(optimization / 10));
+
+    const voxelMap = new Map<string, Voxel>();
+    for (const v of voxels) voxelMap.set(`${v.position[0]},${v.position[1]},${v.position[2]}`, v);
+
+    const processed = new Set<string>();
+    const opt: { position: [number, number, number]; scale: [number, number, number]; color: string; type: string }[] = [];
+
+    for (const v of voxels) {
+      const key = `${v.position[0]},${v.position[1]},${v.position[2]}`;
+      if (processed.has(key)) continue;
+      
+      let w = 1;
+      while (w < maxW) {
+        const nextKey = `${v.position[0] + w},${v.position[1]},${v.position[2]}`;
+        const nextV = voxelMap.get(nextKey);
+        if (nextV && nextV.color === v.color && !processed.has(nextKey)) {
+          w++;
+        } else {
+          break;
+        }
+      }
+      
+      for (let i = 0; i < w; i++) processed.add(`${v.position[0] + i},${v.position[1]},${v.position[2]}`);
+
+      const centerPos: [number, number, number] = [v.position[0] + (w - 1) / 2, v.position[1], v.position[2]];
+      const scale: [number, number, number] = [w - 0.05, 0.95, 0.95];
+      
+      opt.push({ position: centerPos, scale, color: v.color, type: v.type });
+    }
+    return opt;
+  }, [voxels, optimization]);
 
   // Group reference for export logic
   useEffect(() => {
@@ -48,13 +88,13 @@ function StaticVoxelModel({ voxels, wireframe }: { voxels: Voxel[], wireframe: b
       (window as any)._currentVoxelObject = groupRef.current;
     }
     return () => { (window as any)._currentVoxelObject = null; };
-  }, [voxels]);
+  }, [optimizedVoxels]);
 
   return (
     <group ref={groupRef}>
-      {voxels.map((v, i) => (
+      {optimizedVoxels.map((v, i) => (
         <mesh key={i} position={v.position} castShadow receiveShadow>
-          <boxGeometry args={[0.95, 0.95, 0.95]} />
+          <boxGeometry args={v.scale} />
           <meshStandardMaterial 
             color={v.color} 
             metalness={0.4} 
@@ -69,15 +109,15 @@ function StaticVoxelModel({ voxels, wireframe }: { voxels: Voxel[], wireframe: b
   );
 }
 
-function VoxelModel({ voxels, wireframe }: { voxels: Voxel[], wireframe: boolean }) {
+function VoxelModel({ voxels, wireframe, optimization }: { voxels: Voxel[], wireframe: boolean, optimization: number }) {
   return (
     <Float speed={2} rotationIntensity={0.2} floatIntensity={0.4}>
-      <StaticVoxelModel voxels={voxels} wireframe={wireframe} />
+      <StaticVoxelModel voxels={voxels} wireframe={wireframe} optimization={optimization} />
     </Float>
   );
 }
 
-function Scene({ voxels, wireframe }: { voxels: Voxel[], wireframe: boolean }) {
+function Scene({ voxels, wireframe, optimization }: { voxels: Voxel[], wireframe: boolean, optimization: number }) {
   const ambientRef = useRef<THREE.AmbientLight>(null);
   const pointRef = useRef<THREE.PointLight>(null);
 
@@ -153,6 +193,7 @@ export default function VoxelLab() {
   const [complexity, setComplexity] = useState(65);
   const [density, setDensity] = useState(70);
   const [verticality, setVerticality] = useState(50);
+  const [optimization, setOptimization] = useState(0);
   const [exportFormat, setExportFormat] = useState<"obj" | "stl">("obj");
 
   // System Stats Simulation
@@ -165,15 +206,16 @@ export default function VoxelLab() {
 
   useEffect(() => {
     const timer = setInterval(() => {
+      const reduction = 1 - (optimization / 100) * 0.6;
       setTelemetry(prev => ({
         ...prev,
         fps: 58 + Math.floor(Math.random() * 4),
-        triangles: (data?.voxels.length || 0) * 12,
-        gpuMem: `${Math.round((data?.voxels.length || 0) * 0.15)}MB`
+        triangles: Math.floor((data?.voxels.length || 0) * 12 * reduction),
+        gpuMem: `${Math.round((data?.voxels.length || 0) * 0.15 * reduction)}MB`
       }));
     }, 2000);
     return () => clearInterval(timer);
-  }, [data]);
+  }, [data, optimization]);
 
   const generateVoxel = useCallback(async () => {
     if (!prompt.trim() || isGenerating) return;
@@ -456,7 +498,7 @@ export default function VoxelLab() {
         {/* Viewport Area */}
         <div className="lg:col-span-8 bg-black rounded-[3rem] border border-m3-outline-variant/30 overflow-hidden relative group shadow-m3-4">
           <Canvas shadows dpr={[1, 2]}>
-            <Scene voxels={data?.voxels || []} wireframe={wireframe} />
+            <Scene voxels={data?.voxels || []} wireframe={wireframe} optimization={optimization} />
           </Canvas>
 
           {/* Viewport Control Bar */}
@@ -927,7 +969,7 @@ export default function VoxelLab() {
                           </div>
                        </div>
 
-                       <div className="p-6 bg-m3-surface-container-low border border-m3-outline-variant rounded-[2rem] space-y-4 relative group hover:border-m3-tertiary/30 transition-all shadow-m3-2 lg:col-span-2">
+                       <div className="p-6 bg-m3-surface-container-low border border-m3-outline-variant rounded-[2rem] space-y-4 relative group hover:border-m3-tertiary/30 transition-all shadow-m3-2">
                           <label className="text-[10px] font-mono text-neutral-400 uppercase font-black tracking-widest flex items-center gap-2">
                             <div className="w-1 h-1 bg-amber-500 rounded-full" />
                             Verticalidade_Link
@@ -948,6 +990,30 @@ export default function VoxelLab() {
                             <span>HORIZONTAL</span>
                             <span className="text-m3-tertiary font-black">{verticality}%</span>
                             <span>VERTICAIS</span>
+                          </div>
+                       </div>
+
+                       <div className="p-6 bg-m3-surface-container-low border border-m3-outline-variant rounded-[2rem] space-y-4 relative group hover:border-emerald-500/30 transition-all shadow-m3-2">
+                          <label className="text-[10px] font-mono text-neutral-400 uppercase font-black tracking-widest flex items-center gap-2">
+                            <div className="w-1 h-1 bg-emerald-500 rounded-full" />
+                            Optimization Level
+                            <div className="group-hover:opacity-100 opacity-0 transition-opacity ml-auto">
+                              <span title="Destructive merging: combines adjacent voxels of the same color into larger meshes, reducing polygon counts.">
+                                <Info className="w-3.5 h-3.5 text-emerald-500" />
+                              </span>
+                            </div>
+                          </label>
+                          <input 
+                            type="range" 
+                            min="0" max="100" step="10"
+                            value={optimization} 
+                            onChange={(e) => setOptimization(Number(e.target.value))}
+                            className="w-full h-1.5 bg-neutral-900 rounded-full appearance-none cursor-pointer accent-emerald-500" 
+                          />
+                          <div className="flex justify-between text-[9px] font-mono text-neutral-600">
+                            <span>NONE</span>
+                            <span className="text-emerald-500 font-black">{optimization}%</span>
+                            <span>MAX</span>
                           </div>
                        </div>
                     </div>
