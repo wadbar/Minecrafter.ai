@@ -39,47 +39,11 @@ const voxelTemplates = [
 
 // --- 3D Components ---
 
-function StaticVoxelModel({ voxels, wireframe, optimization = 0 }: { voxels: Voxel[], wireframe: boolean, optimization: number }) {
+const StaticVoxelModel = React.memo(function StaticVoxelModel({ voxels, wireframe, optimization = 0 }: { voxels: Voxel[], wireframe: boolean, optimization: number }) {
   const groupRef = useRef<THREE.Group>(null);
 
   const optimizedVoxels = useMemo(() => {
-    if (optimization === 0 || voxels.length === 0) {
-      return voxels.map(v => ({ position: v.position, scale: [0.95, 0.95, 0.95] as [number, number, number], color: v.color, type: v.type }));
-    }
-    
-    // Grouping by y, z
-    // The optimization value acts as max length of merged block (e.g. 100 => up to 10 blocks)
-    let maxW = Math.max(2, Math.ceil(optimization / 10));
-
-    const voxelMap = new Map<string, Voxel>();
-    for (const v of voxels) voxelMap.set(`${v.position[0]},${v.position[1]},${v.position[2]}`, v);
-
-    const processed = new Set<string>();
-    const opt: { position: [number, number, number]; scale: [number, number, number]; color: string; type: string }[] = [];
-
-    for (const v of voxels) {
-      const key = `${v.position[0]},${v.position[1]},${v.position[2]}`;
-      if (processed.has(key)) continue;
-      
-      let w = 1;
-      while (w < maxW) {
-        const nextKey = `${v.position[0] + w},${v.position[1]},${v.position[2]}`;
-        const nextV = voxelMap.get(nextKey);
-        if (nextV && nextV.color === v.color && !processed.has(nextKey)) {
-          w++;
-        } else {
-          break;
-        }
-      }
-      
-      for (let i = 0; i < w; i++) processed.add(`${v.position[0] + i},${v.position[1]},${v.position[2]}`);
-
-      const centerPos: [number, number, number] = [v.position[0] + (w - 1) / 2, v.position[1], v.position[2]];
-      const scale: [number, number, number] = [w - 0.05, 0.95, 0.95];
-      
-      opt.push({ position: centerPos, scale, color: v.color, type: v.type });
-    }
-    return opt;
+    return GeometryEngine.optimizeVoxelMesh(voxels, optimization);
   }, [voxels, optimization]);
 
   // Group reference for export logic
@@ -107,17 +71,17 @@ function StaticVoxelModel({ voxels, wireframe, optimization = 0 }: { voxels: Vox
       ))}
     </group>
   );
-}
+});
 
-function VoxelModel({ voxels, wireframe, optimization }: { voxels: Voxel[], wireframe: boolean, optimization: number }) {
+const VoxelModel = React.memo(function VoxelModel({ voxels, wireframe, optimization }: { voxels: Voxel[], wireframe: boolean, optimization: number }) {
   return (
     <Float speed={2} rotationIntensity={0.2} floatIntensity={0.4}>
       <StaticVoxelModel voxels={voxels} wireframe={wireframe} optimization={optimization} />
     </Float>
   );
-}
+});
 
-function Scene({ voxels, wireframe, optimization }: { voxels: Voxel[], wireframe: boolean, optimization: number }) {
+const Scene = React.memo(function Scene({ voxels, wireframe, optimization }: { voxels: Voxel[], wireframe: boolean, optimization: number }) {
   const ambientRef = useRef<THREE.AmbientLight>(null);
   const pointRef = useRef<THREE.PointLight>(null);
 
@@ -155,7 +119,7 @@ function Scene({ voxels, wireframe, optimization }: { voxels: Voxel[], wireframe
       />
       
       <Suspense fallback={null}>
-        <VoxelModel voxels={voxels} wireframe={wireframe} />
+        <VoxelModel voxels={voxels} wireframe={wireframe} optimization={optimization} />
         <Environment preset="night" />
         <ContactShadows 
           resolution={1024} 
@@ -173,7 +137,7 @@ function Scene({ voxels, wireframe, optimization }: { voxels: Voxel[], wireframe
       </GizmoHelper>
     </>
   );
-}
+});
 
 // --- Main UI Component ---
 
@@ -993,13 +957,13 @@ export default function VoxelLab() {
                           </div>
                        </div>
 
-                       <div className="p-6 bg-m3-surface-container-low border border-m3-outline-variant rounded-[2rem] space-y-4 relative group hover:border-emerald-500/30 transition-all shadow-m3-2">
+                       <div className="p-6 bg-m3-surface-container-low border border-m3-outline-variant rounded-[2rem] space-y-4 relative group hover:border-m3-primary/30 transition-all shadow-m3-2">
                           <label className="text-[10px] font-mono text-neutral-400 uppercase font-black tracking-widest flex items-center gap-2">
-                            <div className="w-1 h-1 bg-emerald-500 rounded-full" />
+                            <div className="w-1 h-1 bg-m3-primary rounded-full" />
                             Optimization Level
                             <div className="group-hover:opacity-100 opacity-0 transition-opacity ml-auto">
                               <span title="Destructive merging: combines adjacent voxels of the same color into larger meshes, reducing polygon counts.">
-                                <Info className="w-3.5 h-3.5 text-emerald-500" />
+                                <Info className="w-3.5 h-3.5 text-m3-primary" />
                               </span>
                             </div>
                           </label>
@@ -1008,11 +972,11 @@ export default function VoxelLab() {
                             min="0" max="100" step="10"
                             value={optimization} 
                             onChange={(e) => setOptimization(Number(e.target.value))}
-                            className="w-full h-1.5 bg-neutral-900 rounded-full appearance-none cursor-pointer accent-emerald-500" 
+                            className="w-full h-1.5 bg-neutral-900 rounded-full appearance-none cursor-pointer accent-m3-primary" 
                           />
                           <div className="flex justify-between text-[9px] font-mono text-neutral-600">
                             <span>NONE</span>
-                            <span className="text-emerald-500 font-black">{optimization}%</span>
+                            <span className="text-m3-primary font-black">{optimization}%</span>
                             <span>MAX</span>
                           </div>
                        </div>

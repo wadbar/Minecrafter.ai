@@ -64,6 +64,96 @@ export const GeometryEngine = {
   },
 
   /**
+   * Identifies adjacent blocks with identical color properties and merges 
+   * them into larger bounding-box meshes to minimize draw calls.
+   */
+  optimizeVoxelMesh: (voxels: any[], optimizationLevel: number): { position: [number, number, number]; scale: [number, number, number]; color: string; type: string }[] => {
+    if (optimizationLevel === 0 || voxels.length === 0) {
+      return voxels.map(v => ({ 
+        position: v.position, 
+        scale: [0.95, 0.95, 0.95] as [number, number, number], 
+        color: v.color, 
+        type: v.type 
+      }));
+    }
+    
+    // The optimization value acts as max length of merged block (e.g. 100 => up to 10 blocks)
+    let maxMerge = Math.max(2, Math.ceil(optimizationLevel / 10));
+
+    const voxelMap = new Map<string, any>();
+    for (const v of voxels) voxelMap.set(`${v.position[0]},${v.position[1]},${v.position[2]}`, v);
+
+    const processed = new Set<string>();
+    const opt: { position: [number, number, number]; scale: [number, number, number]; color: string; type: string }[] = [];
+
+    for (const v of voxels) {
+      const key = `${v.position[0]},${v.position[1]},${v.position[2]}`;
+      if (processed.has(key)) continue;
+      
+      let w = 1, h = 1, d = 1;
+
+      // 1. Grow in X
+      while (w < maxMerge) {
+        const nextKey = `${v.position[0] + w},${v.position[1]},${v.position[2]}`;
+        const nextV = voxelMap.get(nextKey);
+        if (nextV && nextV.color === v.color && !processed.has(nextKey)) w++;
+        else break;
+      }
+
+      // 2. Grow in Y matching full width W
+      while (h < maxMerge) {
+        let canGrowY = true;
+        for (let ix = 0; ix < w; ix++) {
+          const nextKey = `${v.position[0] + ix},${v.position[1] + h},${v.position[2]}`;
+          const nextV = voxelMap.get(nextKey);
+          if (!nextV || nextV.color !== v.color || processed.has(nextKey)) {
+            canGrowY = false;
+            break;
+          }
+        }
+        if (canGrowY) h++;
+        else break;
+      }
+
+      // 3. Grow in Z matching full width W and height H
+      while (d < maxMerge) {
+        let canGrowZ = true;
+        for (let ix = 0; ix < w; ix++) {
+          for (let iy = 0; iy < h; iy++) {
+            const nextKey = `${v.position[0] + ix},${v.position[1] + iy},${v.position[2] + d}`;
+            const nextV = voxelMap.get(nextKey);
+            if (!nextV || nextV.color !== v.color || processed.has(nextKey)) {
+              canGrowZ = false;
+              break;
+            }
+          }
+          if (!canGrowZ) break;
+        }
+        if (canGrowZ) d++;
+        else break;
+      }
+      
+      for (let ix = 0; ix < w; ix++) {
+        for (let iy = 0; iy < h; iy++) {
+          for (let iz = 0; iz < d; iz++) {
+            processed.add(`${v.position[0] + ix},${v.position[1] + iy},${v.position[2] + iz}`);
+          }
+        }
+      }
+
+      const centerPos: [number, number, number] = [
+        v.position[0] + (w - 1) / 2, 
+        v.position[1] + (h - 1) / 2, 
+        v.position[2] + (d - 1) / 2
+      ];
+      const scale: [number, number, number] = [w - 0.05, h - 0.05, d - 0.05];
+      
+      opt.push({ position: centerPos, scale, color: v.color, type: v.type });
+    }
+    return opt;
+  },
+
+  /**
    * Calculates structural bounding box for telemetry.
    */
   calculateBounds: (voxels: any[]) => {
