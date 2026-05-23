@@ -53,12 +53,47 @@ export default function TextureGenerator() {
   
   // Advanced Features State
   const [showGrid, setShowGrid] = useState(false);
+  const [showChecker, setShowChecker] = useState(true);
   const [gridSize, setGridSize] = useState(16);
   const [gridOpacity, setGridOpacity] = useState(0.3);
   const [exportFormat, setExportFormat] = useState("image/png");
   const [compression, setCompression] = useState(false);
   const [baseTexture, setBaseTexture] = useState<string | null>(null);
+  const [autoSave, setAutoSave] = useState(false);
+  const [palette, setPalette] = useState<string[]>([]);
+  const [zoom, setZoom] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const rgbToHex = (r: number, g: number, b: number) => 
+    "#" + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+
+  const extractPalette = useCallback((dataUrl: string) => {
+    if (!dataUrl || !dataUrl.startsWith("data:image")) return;
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const colorMap = new Map<string, number>();
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 128) continue; // Skip highly transparent pixels
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const hex = rgbToHex(r, g, b);
+        colorMap.set(hex, (colorMap.get(hex) || 0) + 1);
+      }
+      const sorted = Array.from(colorMap.entries()).sort((a, b) => b[1] - a[1]);
+      setPalette(sorted.slice(0, 6).map(x => x[0]));
+    };
+    img.src = dataUrl;
+  }, []);
 
   const uvValidation = useMemo(() => {
     const standards = [16, 32, 64, 128, 256, 512];
@@ -117,6 +152,28 @@ export default function TextureGenerator() {
       return result;
     }
   }, [width, height, aspectRatio, addHistory]);
+
+  useEffect(() => {
+    if (currentImage) {
+      extractPalette(currentImage);
+      
+      // Draw image on canvas for preview
+      if (canvasRef.current) {
+         const ctx = canvasRef.current.getContext('2d');
+         if (ctx) {
+            const img = new Image();
+            img.onload = () => {
+              canvasRef.current!.width = img.width;
+              canvasRef.current!.height = img.height;
+              // Clear with checkerboard pattern if enabled (handled via CSS instead for ease)
+              ctx.clearRect(0,0, canvasRef.current!.width, canvasRef.current!.height);
+              ctx.drawImage(img, 0, 0);
+            };
+            img.src = currentImage;
+         }
+      }
+    }
+  }, [currentImage, extractPalette]);
 
   const onGenerateComplete = useCallback((result: string) => {
     if (currentImage) {
@@ -257,6 +314,18 @@ export default function TextureGenerator() {
           <FileJson className="w-3 h-3" />
           {t.textureGenerator.compression}: {compression ? 'ON' : 'OFF'}
         </button>
+        <div className="w-px h-4 bg-m3-outline-variant mx-2" />
+        <button 
+          onClick={() => setAutoSave(!autoSave)}
+          className={cn(
+            "px-3 py-1.5 rounded-full border text-[9px] font-black uppercase transition-all flex items-center gap-2",
+            autoSave ? "bg-m3-secondary/10 text-m3-secondary border-m3-secondary shadow-m3-1" : "bg-m3-surface-container border-m3-outline-variant text-m3-on-surface-variant hover:bg-m3-surface-variant"
+          )}
+          title="Auto-Save to Cloud Vault"
+        >
+          <Cloud className="w-3 h-3" />
+          Auto-Save Cloud: {autoSave ? 'ON' : 'OFF'}
+        </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-4 text-m3-on-surface-variant font-mono text-xs">
@@ -354,6 +423,17 @@ export default function TextureGenerator() {
                 {showGrid ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                 {showGrid && <span className="text-[9px] font-black uppercase pr-1">GRID</span>}
               </button>
+              <button 
+                onClick={() => setShowChecker(!showChecker)}
+                className={cn(
+                  "p-2 rounded-full transition-colors flex items-center gap-2",
+                  showChecker ? "bg-m3-secondary text-m3-on-secondary shadow-m3-1" : "text-m3-on-surface-variant hover:bg-m3-surface-variant"
+                )}
+                title="Toggle Checkerboard Background"
+              >
+                {showChecker ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                {showChecker && <span className="text-[9px] font-black uppercase pr-1">CHECKER</span>}
+              </button>
           </div>
         )}
 
@@ -397,7 +477,7 @@ export default function TextureGenerator() {
         )}
       </AnimatePresence>
     </div>
-  ), [width, height, aspectRatio, showDocs, currentImage, undoStack, redoStack, undo, redo, applyPreset]);
+  ), [width, height, aspectRatio, showDocs, currentImage, undoStack, redoStack, undo, redo, applyPreset, autoSave, baseTexture, exportFormat, compression]);
 
   const renderLoading = useCallback(() => (
     <div className="flex flex-col items-center justify-center min-h-[400px] space-y-8">
@@ -438,43 +518,77 @@ export default function TextureGenerator() {
           >
             <div className="absolute -inset-6 bg-m3-primary/10 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
             <div className="relative bg-m3-surface-container border border-m3-outline-variant p-8 rounded-[2.5rem] shadow-m3-4 transition-all group-hover:border-m3-primary/30">
-              <div className="relative overflow-hidden rounded-2xl">
-                <img 
-                  src={finalResult} 
-                  alt="Resultado da Geração" 
-                  className="max-w-full max-h-[50vh] object-contain shadow-2xl" 
-                  style={{ imageRendering: 'pixelated' }} 
-                />
-                
-                {/* Visual Grid Overlay */}
-                <AnimatePresence>
-                  {showGrid && (
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: gridOpacity }}
-                      exit={{ opacity: 0 }}
-                      className="absolute inset-0 pointer-events-none"
-                      style={{
-                        backgroundImage: `
-                          linear-gradient(to right, #fff 1px, transparent 1px),
-                          linear-gradient(to bottom, #fff 1px, transparent 1px)
-                        `,
-                        backgroundSize: `${100/gridSize}% ${100/gridSize}%`, // Adjustable grid
-                        mixBlendMode: 'difference'
-                      }}
-                    />
+              <div 
+                className="relative overflow-hidden rounded-2xl flex flex-col items-center justify-center p-4 bg-m3-surface-container-high border border-m3-outline-variant"
+                onWheel={(e) => {
+                  e.preventDefault();
+                  setZoom(prev => Math.min(Math.max(0.5, prev - e.deltaY * 0.01), 5));
+                }}
+              >
+                <div 
+                  className={cn(
+                    "relative overflow-hidden rounded shadow-2xl transition-all duration-300", 
+                    showChecker && "bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjY2NjIiAvPjxyZWN0IHg9IjEwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9IiNmZmYiIC8+PHJlY3QgeT0iMTAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iI2ZmZiIgLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iI2NjYyIgLz48L3N2Zz4=')]"
                   )}
-                </AnimatePresence>
+                  style={{
+                    transform: `scale(${zoom})`,
+                  }}
+                >
+                    <canvas
+                      ref={canvasRef}
+                      className="max-w-full max-h-[50vh] object-contain"
+                      style={{ imageRendering: 'pixelated' }}
+                    />
+                    
+                    {/* Visual Grid Overlay */}
+                    <AnimatePresence>
+                      {showGrid && (
+                        <motion.div 
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: gridOpacity }}
+                          exit={{ opacity: 0 }}
+                          className="absolute inset-0 pointer-events-none"
+                          style={{
+                            backgroundImage: `
+                              linear-gradient(to right, rgba(0,0,0,0.5) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(0,0,0,0.5) 1px, transparent 1px)
+                            `,
+                            backgroundSize: `${100/gridSize}% ${100/gridSize}%`,
+                          }}
+                        />
+                      )}
+                    </AnimatePresence>
+                </div>
               </div>
+
+              {palette.length > 0 && (
+                 <div className="mt-8 flex flex-col items-center gap-2 animate-in slide-in-from-bottom-4">
+                   <span className="text-[9px] font-black uppercase text-m3-on-surface-variant tracking-widest opacity-60">Dominant Colors</span>
+                   <div className="flex gap-2 bg-m3-surface-container-high p-2 rounded-2xl border border-m3-outline-variant shadow-inner">
+                     {palette.map((color, i) => (
+                        <div 
+                           key={i} 
+                           className="w-8 h-8 rounded-xl shadow-sm border border-black/10 transition-transform hover:scale-110 cursor-pointer"
+                           style={{ backgroundColor: color }}
+                           title={color}
+                           onClick={() => {
+                             navigator.clipboard.writeText(color);
+                             toast.success("Cor copiada para a área de transferência!");
+                           }}
+                        />
+                     ))}
+                   </div>
+                 </div>
+              )}
               
-              <div className="absolute -top-4 -left-4 z-20">
+              <div className="absolute -top-4 -left-4 z-20 flex gap-2">
                 <div className="bg-m3-primary text-m3-on-primary shadow-m3-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border-2 border-m3-surface">
                   ID: {Math.random().toString(16).substr(2, 6).toUpperCase()}
                 </div>
               </div>
 
               {showGrid && (
-                <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-m3-surface-container-high border border-m3-outline-variant p-3 px-6 rounded-full shadow-m3-3 animate-in slide-in-from-top-2">
+                <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-m3-surface-container-high border border-m3-outline-variant p-3 px-6 rounded-full shadow-m3-3 animate-in slide-in-from-top-2 z-10 w-max">
                    <div className="flex items-center gap-2 border-r border-m3-outline-variant pr-4">
                     <span className="text-[9px] font-black uppercase text-m3-on-surface-variant opacity-60">Grid UV:</span>
                     <select 
@@ -488,8 +602,8 @@ export default function TextureGenerator() {
                       <option value="64">64x64</option>
                     </select>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[9px] font-black uppercase text-m3-on-surface-variant opacity-60">Opacidade:</span>
+                  <div className="flex items-center gap-3 border-r border-m3-outline-variant pr-4">
+                    <span className="text-[9px] font-black uppercase text-m3-on-surface-variant opacity-60">Opacity:</span>
                     <input 
                       type="range" 
                       min="0.1" 
@@ -497,7 +611,19 @@ export default function TextureGenerator() {
                       step="0.1" 
                       value={gridOpacity} 
                       onChange={(e) => setGridOpacity(Number(e.target.value))}
-                      className="w-24 accent-m3-primary h-1"
+                      className="w-20 accent-m3-primary h-1"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[9px] font-black uppercase text-m3-on-surface-variant opacity-60">Zoom:</span>
+                    <input 
+                      type="range" 
+                      min="0.5" 
+                      max="5" 
+                      step="0.1" 
+                      value={zoom} 
+                      onChange={(e) => setZoom(Number(e.target.value))}
+                      className="w-20 accent-m3-secondary h-1"
                     />
                   </div>
                 </div>
@@ -699,6 +825,7 @@ export default function TextureGenerator() {
       ]}
       extraControls={controls}
       onSaveCloud={saveToCloud}
+      autoSaveCloud={autoSave}
       renderOutput={renderOutput}
     />
   );

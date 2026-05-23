@@ -18,6 +18,7 @@ import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import { LanguageProvider, useTranslation } from "./context/LanguageContext";
 import { cn } from "./lib/utils";
 import { Moon, Sun, Languages } from "lucide-react";
+import { monitoringService } from "./services/MonitoringService";
 
 // Lazy loading heavy generator components for performance optimization
 const MapGenerator = lazy(() => import("./components/MapGenerator"));
@@ -74,10 +75,15 @@ function AppContent() {
           }
         }
         
+        const finalCpu = cpuLoad || (40 + Math.floor(Math.random() * 5));
+        const finalLoad = memoryLoad;
+
+        monitoringService.recordMetrics(finalCpu, finalLoad);
+
         setTelemetry(prev => ({
           ...prev,
-          cpu: cpuLoad || (40 + Math.floor(Math.random() * 5)),
-          load: memoryLoad
+          cpu: finalCpu,
+          load: finalLoad
         }));
       } catch (err) {
         setTelemetry(prev => ({
@@ -151,24 +157,24 @@ function AppContent() {
           <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">{t.common.industrialSolutions}</span>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button 
             onClick={() => setLanguage(language === "en" ? "pt" : "en")}
-            className="flex items-center gap-2 p-1.5 px-3 rounded-full hover:bg-m3-surface-variant text-m3-on-surface-variant transition-colors group"
+            className="flex items-center justify-center min-h-[48px] min-w-[48px] gap-2 p-1.5 px-3 rounded-full hover:bg-m3-surface-variant text-m3-on-surface-variant transition-colors group"
             title={language === "en" ? "Translate to Portuguese" : "Traduzir para Inglês"}
           >
-            <Languages className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-            <span className="text-[10px] font-bold uppercase">{language}</span>
+            <Languages className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+            <span className="text-[10px] font-bold uppercase hidden md:inline-block">{language}</span>
           </button>
           <button 
             onClick={toggleTheme}
-            className="p-1.5 rounded-full hover:bg-m3-surface-variant text-m3-on-surface-variant transition-colors"
+            className="flex items-center justify-center min-h-[48px] min-w-[48px] p-1.5 rounded-full hover:bg-m3-surface-variant text-m3-on-surface-variant transition-colors"
           >
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
-          <div className="flex items-center gap-2 px-2 py-0.5 bg-m3-secondary-container text-m3-on-secondary-container rounded-full text-[9px] font-bold uppercase tracking-tight">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-m3-secondary-container text-m3-on-secondary-container rounded-full text-[10px] font-bold uppercase tracking-tight ml-2">
              <div className="w-1.5 h-1.5 rounded-full bg-m3-primary animate-pulse" />
-             <span>Core v2.4.0</span>
+             <span>Core v3.1.0</span>
           </div>
         </div>
       </div>
@@ -187,7 +193,7 @@ function AppContent() {
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className={cn(
-                  "p-2 rounded-full transition-transform active:scale-90",
+                  "flex items-center justify-center min-w-[48px] min-h-[48px] rounded-full transition-transform active:scale-90",
                   sidebarOpen ? "text-m3-primary" : "text-m3-on-surface-variant hover:bg-m3-surface-variant"
                 )}
                 aria-label="Toggle Menu"

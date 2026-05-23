@@ -23,6 +23,7 @@ interface GeneratorLayoutProps {
   extraControls?: React.ReactNode;
   onVoiceCommand?: (transcript: string) => boolean;
   parameters?: any;
+  autoSaveCloud?: boolean;
 }
 
 export default React.memo(function GeneratorLayout({
@@ -39,6 +40,7 @@ export default React.memo(function GeneratorLayout({
   promptTemplates,
   onVoiceCommand,
   parameters: moduleParams,
+  autoSaveCloud = true,
 }: GeneratorLayoutProps & { promptTemplates?: { label: string, prompt: string, description?: string }[] }) {
   const [prompt, setPrompt] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -96,7 +98,7 @@ export default React.memo(function GeneratorLayout({
        });
 
        // Auto-save to Cloud Vault if logged in
-       if (user && onSaveCloud) {
+       if (user && onSaveCloud && autoSaveCloud) {
          const artifactTitle = `${title} [${mode === "create" ? "GEN" : "OPT"}]: ${lastGeneratedPromptRef.current.slice(0, 25)}...`;
          onSaveCloud(artifactTitle, result).catch(() => {
            console.warn("Auto-save to vault failed.");
@@ -138,7 +140,7 @@ export default React.memo(function GeneratorLayout({
         });
 
         // Auto-save for manual generation
-        if (user && onSaveCloud) {
+        if (user && onSaveCloud && autoSaveCloud) {
           const titleText = `${title} [${mode === "create" ? "GEN" : "OPT"}]: ${currentPrompt.slice(0, 25)}...`;
           onSaveCloud(titleText, generatedResult).catch(() => {
             console.warn("Auto-save to vault failed.");
