@@ -529,9 +529,21 @@ REQUIREMENTS:
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
+    logger.info("Initializing high-performance static file serving in Production mode.");
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
+    app.use(express.static(distPath, {
+      maxAge: '1y',
+      immutable: true,
+      etag: true,
+      lastModified: true
+    }));
+    app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html"), {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    }));
   }
 
   // Graceful Shutdown & Recovery

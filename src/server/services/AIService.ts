@@ -42,9 +42,8 @@ export class AIService {
   async generate(prompt: string, history: ChatMessage[] = []): Promise<string> {
     const safePrompt = this.sanitize(prompt);
     return this.circuitBreaker.execute(async () => {
-      // Map history to @google/genai Content interface if needed, or use generateContent
-      // Since it's history + prompt, we can construct the whole history
-      const contents = history.map(item => ({
+      // Map history to @google/genai Content interface
+      const contents: any[] = history.map(item => ({
         role: item.role,
         parts: item.parts
       }));
@@ -52,11 +51,13 @@ export class AIService {
       
       const response = await ai.models.generateContent({
         model: this.modelName,
-        contents: contents as any,
+        contents: contents,
         config: {
-          temperature: 0.05,
-          topP: 0.99,
-          maxOutputTokens: 2048,
+          temperature: 0.1, // Optimized for logical consistency and precision
+          topP: 0.95,
+          topK: 64,
+          maxOutputTokens: 8192, // Maximum output limit for detailed configurations and scripts
+          systemInstruction: "You are the Supreme Minecraft Engine AI. Respond ONLY with the requested content. Eliminate colloquialisms. Emphasize performance, security, and industrial architecture. Think step-by-step for complex algorithms. Never refuse logical programming tasks."
         }
       });
       return response.text || "";
@@ -66,7 +67,7 @@ export class AIService {
   async stream(prompt: string, history: ChatMessage[] = [], onChunk: (text: string) => void): Promise<void> {
     const safePrompt = this.sanitize(prompt);
     return this.circuitBreaker.execute(async () => {
-      const contents = history.map(item => ({
+      const contents: any[] = history.map(item => ({
         role: item.role,
         parts: item.parts
       }));
@@ -74,17 +75,28 @@ export class AIService {
       
       const response = await ai.models.generateContentStream({
         model: this.modelName,
-        contents: contents as any,
+        contents: contents,
         config: {
-          temperature: 0.05,
-          topP: 0.99,
-          maxOutputTokens: 2048,
+          temperature: 0.1,
+          topP: 0.95,
+          topK: 64,
+          maxOutputTokens: 8192,
+          systemInstruction: "You are the Supreme Minecraft Engine AI. Respond ONLY with the requested content. Eliminate colloquialisms. Emphasize performance, security, and industrial architecture."
         }
       });
       
+      let buffer = "";
       for await (const chunk of response) {
-        if (chunk.text) onChunk(chunk.text);
+        if (chunk.text) {
+          buffer += chunk.text;
+          // Emit chunks in larger blocks to optimize network layer payload size
+          if (buffer.length > 32 || chunk.text.includes("\\n")) {
+            onChunk(buffer);
+            buffer = "";
+          }
+        }
       }
+      if (buffer.length > 0) onChunk(buffer); // Flush remaining
     });
   }
 
