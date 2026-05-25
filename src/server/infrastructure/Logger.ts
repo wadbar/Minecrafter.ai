@@ -18,21 +18,22 @@ const winstonLogger = winston.createLogger({
 });
 
 export const logger = {
-  info: (msg: string, meta?: any) => {
+  info: (msg: string, meta?: Record<string, unknown>) => {
     winstonLogger.info(msg, { traceId: meta?.traceId || uuidv4(), ...meta });
   },
-  error: (msg: string, error?: any, meta?: any) => {
+  error: (msg: string, error?: unknown, meta?: Record<string, unknown>) => {
+    const errObj = error instanceof Error ? error : new Error(String(error || ''));
     winstonLogger.error(msg, {
-      error: error?.message || error,
-      stack: error?.stack,
+      error: errObj.message,
+      stack: errObj.stack,
       traceId: meta?.traceId || uuidv4(),
       ...meta
     });
   },
-  warn: (msg: string, meta?: any) => {
+  warn: (msg: string, meta?: Record<string, unknown>) => {
     winstonLogger.warn(msg, { traceId: meta?.traceId || uuidv4(), ...meta });
   },
-  debug: (msg: string, meta?: any) => {
+  debug: (msg: string, meta?: Record<string, unknown>) => {
     winstonLogger.debug(msg, { traceId: meta?.traceId || uuidv4(), ...meta });
   }
 };

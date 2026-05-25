@@ -33,6 +33,20 @@ export async function deleteArtifacts(ids: string[]) {
   await batch.commit();
 }
 
+export async function updateArtifactTagsBatch(ids: string[], newTag: string) {
+  if (!auth.currentUser) throw new Error("Usuário não autenticado");
+  const { writeBatch, doc, arrayUnion } = await import('firebase/firestore');
+  const batch = writeBatch(db);
+  
+  ids.forEach(id => {
+    batch.update(doc(db, "artifacts", id), {
+      tags: arrayUnion(newTag)
+    });
+  });
+  
+  await batch.commit();
+}
+
 export async function updateArtifactTags(id: string, tags: string[]) {
   if (!auth.currentUser) throw new Error("Usuário não autenticado");
   const { doc, updateDoc } = await import('firebase/firestore');

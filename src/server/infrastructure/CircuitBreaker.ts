@@ -44,16 +44,18 @@ export class CircuitBreaker {
       }
       
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.failures++;
+      
+      const err = error instanceof Error ? error : new Error(String(error));
       
       if (this.failures >= this.failureThreshold) {
         this.state = "OPEN";
         this.nextAttempt = Date.now() + this.recoveryTimeout;
-        logger.error(`[CIRCUIT-BREAKER] ${this.name} -> OPEN. Failure threshold exceeded.`, error);
+        logger.error(`[CIRCUIT-BREAKER] ${this.name} -> OPEN. Failure threshold exceeded.`, err);
       }
       
-      throw error;
+      throw err;
     }
   }
 }

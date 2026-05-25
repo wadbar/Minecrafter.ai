@@ -10,7 +10,7 @@ import { cn } from "../lib/utils";
 import { toast } from "sonner";
 import { Skeleton } from "./Skeleton";
 import { motion } from "motion/react";
-import { deleteArtifacts, updateArtifactTags } from "../lib/db";
+import { deleteArtifacts, updateArtifactTags, updateArtifactTagsBatch } from "../lib/db";
 import { FixedSizeList as List } from "react-window";
 
 interface Artifact {
@@ -47,7 +47,43 @@ const HighlightText = ({ text, highlight }: { text: string; highlight: string })
   return (
     <span>
       {parts.map((part, i) => 
-        regex.test(part) ? <span key={i} className="bg-emerald-500/30 text-emerald-400 font-bold px-0.5 rounded">{part}</span> : <span key={i}>{part}</span>
+        part.toLowerCase() === highlight.toLowerCase() ? <span key={i} className="bg-emerald-500/30 text-emerald-400 font-bold px-0.5 rounded">{part}</span> : <span key={i}>{part}</span>
+      )}
+    </span>
+  );
+};
+
+const HighlightSnippet = ({ text, highlight }: { text: string; highlight: string }) => {
+  if (!text) return null;
+  const isImage = text.startsWith('data:image');
+  if (isImage) text = "Binary Asset";
+  
+  if (!highlight.trim()) return <span className="truncate">{text.substring(0, 80)}</span>;
+  
+  const regex = new RegExp(`(${highlight})`, "gi");
+  const match = regex.exec(text);
+  
+  if (!match) return <span className="truncate">{text.substring(0, 80)}</span>;
+  
+  const start = Math.max(0, match.index - 30);
+  const end = Math.min(text.length, match.index + highlight.length + 30);
+  let snippet = text.substring(start, end);
+  if (start > 0) snippet = "..." + snippet;
+  if (end < text.length) snippet = snippet + "...";
+  
+  const splitRegex = new RegExp(`(${highlight})`, "gi");
+  const parts = snippet.split(splitRegex);
+  
+  return (
+    <span className="truncate">
+      {parts.map((part, i) =>
+        part.toLowerCase() === highlight.toLowerCase() ? (
+          <span key={i} className="bg-emerald-500/30 text-emerald-400 font-bold px-0.5 rounded">
+            {part}
+          </span>
+        ) : (
+          <span key={i}>{part}</span>
+        )
       )}
     </span>
   );
@@ -294,6 +330,46 @@ export default function CloudVault() {
     }
   };
 
+  const [showBulkTagModal, setShowBulkTagModal] = useState(false);
+  const [bulkTagInput, setBulkTagInput] = useState("");
+
+  const handleBulkTagClick = () => {
+    if (selectedForBatch.size === 0) return;
+    setBulkTagInput("");
+    setShowBulkTagModal(true);
+  };
+
+  const confirmBulkTag = async () => {
+    const rawTag = bulkTagInput.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    if (!rawTag) {
+      toast.warning("Please enter a valid tag alphanumeric tag.");
+      return;
+    }
+    const tId = toast.loading("Applying Bulk Tags...");
+    try {
+      const ids = Array.from(selectedForBatch);
+      await updateArtifactTagsBatch(ids, rawTag);
+      
+      setArtifacts(prev => prev.map(a => {
+        if (selectedForBatch.has(a.id)) {
+          return { ...a, tags: [...new Set([...(a.tags || []), rawTag])] };
+        }
+        return a;
+      }));
+      
+      if (selectedArtifact && selectedForBatch.has(selectedArtifact.id)) {
+         setSelectedArtifact(prev => prev ? { ...prev, tags: [...new Set([...(prev.tags || []), rawTag])] } : prev);
+      }
+      
+      setShowBulkTagModal(false);
+      setSelectedForBatch(new Set());
+      setIsMultiSelect(false);
+      toast.success("Tags Applied Successfully.", { id: tId });
+    } catch (err: unknown) {
+      toast.error("Bulk Tagging Failed", { id: tId, description: (err as Error).message });
+    }
+  };
+
   const handleBatchDownload = async () => {
     if (selectedForBatch.size === 0) {
        toast.warning("No artifacts selected.");
@@ -333,12 +409,12 @@ export default function CloudVault() {
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-12rem)] text-center space-y-6">
-        <div className="w-20 h-20 rounded-full border border-neutral-900 flex items-center justify-center bg-neutral-950 shadow-2xl">
-           <Box className="w-10 h-10 text-neutral-800" />
+        <div className="w-20 h-20 rounded-full border border-m3-outline flex items-center justify-center bg-m3-background shadow-m3-3">
+           <Box className="w-10 h-10 text-m3-outline" />
         </div>
         <div className="space-y-2">
-          <h2 className="text-3xl font-bold text-white tracking-tighter">Vault_Offline</h2>
-          <p className="text-neutral-500 max-w-sm mx-auto font-medium">
+          <h2 className="text-3xl font-bold text-m3-on-surface tracking-tighter">Vault_Offline</h2>
+          <p className="text-m3-on-surface-variant max-w-sm mx-auto font-medium">
             Authenticate via ID to access the global robust artifact registry.
           </p>
         </div>
@@ -351,18 +427,18 @@ export default function CloudVault() {
 
   return (
     <div className="h-full flex flex-col gap-6 pb-20">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-neutral-800">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-m3-outline-variant">
         <div className="space-y-1">
           <div className="flex items-center gap-2 mb-1">
             <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-            <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em] font-bold">Cloud_Vault_Registry</span>
+            <span className="text-[10px] font-mono text-m3-on-surface-variant uppercase tracking-[0.2em] font-bold">Cloud_Vault_Registry</span>
           </div>
-          <h2 className="text-4xl font-bold tracking-tighter text-white">Central Artifacts</h2>
-          <p className="text-sm text-neutral-500 font-medium">Arquivos estruturais em alta disponibilidade (SRE Ready).</p>
+          <h2 className="text-4xl font-bold tracking-tighter text-m3-on-surface">Central Artifacts</h2>
+          <p className="text-sm text-m3-on-surface-variant font-medium">Arquivos estruturais em alta disponibilidade (SRE Ready).</p>
         </div>
         <div className="flex flex-col items-end gap-2 relative">
-           <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 p-1 px-2 rounded-lg relative">
-              <Search className="w-3.5 h-3.5 text-neutral-500" />
+           <div className="flex items-center gap-2 bg-m3-surface-variant border border-m3-outline-variant p-1 px-2 rounded-lg relative">
+              <Search className="w-3.5 h-3.5 text-m3-on-surface-variant" />
               <input 
                 type="text" 
                 placeholder="Search index..." 
@@ -372,21 +448,23 @@ export default function CloudVault() {
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === "Enter" && searchQuery.trim()) {
-                    const latest = [searchQuery.trim(), ...searchHistory.filter(h => h !== searchQuery.trim())].slice(0, 5);
-                    setSearchHistory(latest);
-                    localStorage.setItem("vault_search_history", JSON.stringify(latest));
+                    if (filteredArtifacts.length > 0) {
+                      const latest = [searchQuery.trim(), ...searchHistory.filter(h => h !== searchQuery.trim())].slice(0, 5);
+                      setSearchHistory(latest);
+                      localStorage.setItem("vault_search_history", JSON.stringify(latest));
+                    }
                     setShowHistory(false);
                   }
                 }}
-                className="bg-transparent border-none outline-none text-[11px] font-mono text-neutral-300 w-48 placeholder:text-neutral-700"
+                className="bg-transparent border-none outline-none text-[11px] font-mono text-m3-on-surface w-48 placeholder:text-m3-on-surface-variant"
               />
-              {searchQuery && <X className="w-3 h-3 text-neutral-600 cursor-pointer" onClick={() => setSearchQuery("")} />}
+              {searchQuery && <X className="w-3 h-3 text-m3-on-surface-variant cursor-pointer" onClick={() => setSearchQuery("")} />}
            </div>
            
            {showHistory && searchHistory.length > 0 && (
-              <div className="absolute top-full right-0 mt-1 w-full bg-neutral-900 border border-neutral-800 rounded-lg shadow-2xl z-50 overflow-hidden">
-                 <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800 bg-neutral-950/50">
-                    <span className="text-[9px] font-mono uppercase tracking-widest text-neutral-500 font-bold">Recent_Searches</span>
+              <div className="absolute top-full right-0 mt-1 w-full bg-m3-surface-variant border border-m3-outline-variant rounded-lg shadow-m3-3 z-50 overflow-hidden">
+                 <div className="flex items-center justify-between px-3 py-2 border-b border-m3-outline-variant bg-m3-background">
+                    <span className="text-[9px] font-mono uppercase tracking-widest text-m3-on-surface-variant font-bold">Recent_Searches</span>
                     <button 
                       onClick={(e) => { e.stopPropagation(); setSearchHistory([]); localStorage.removeItem("vault_search_history"); }}
                       className="text-[9px] text-red-500 font-bold uppercase hover:underline"
@@ -402,7 +480,7 @@ export default function CloudVault() {
                            setSearchQuery(item);
                            setShowHistory(false);
                          }}
-                         className="w-full text-left px-3 py-2 text-[11px] font-mono text-neutral-300 hover:bg-neutral-800 transition-colors border-b border-neutral-800/50 last:border-0"
+                         className="w-full text-left px-3 py-2 text-[11px] font-mono text-m3-on-surface hover:bg-m3-surface-variant transition-colors border-b border-m3-outline-variant/50 last:border-0"
                        >
                           {item}
                        </button>
@@ -410,8 +488,8 @@ export default function CloudVault() {
                  </div>
               </div>
            )}
-           <div className="text-[9px] font-mono text-neutral-600 uppercase mt-1">
-              Registry_Nodes: <span className="text-white">{artifacts.length}</span> // Filtered: <span className="text-emerald-500">{filteredArtifacts.length}</span>
+           <div className="text-[9px] font-mono text-m3-on-surface-variant uppercase mt-1">
+              Registry_Nodes: <span className="text-m3-on-surface">{artifacts.length}</span> // Filtered: <span className="text-emerald-500">{filteredArtifacts.length}</span>
            </div>
         </div>
       </header>
@@ -423,7 +501,7 @@ export default function CloudVault() {
              onClick={() => setActiveFilter("all")}
              className={cn(
                "px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all",
-               activeFilter === "all" ? "bg-white text-black border-white" : "text-neutral-500 border-neutral-800 hover:border-neutral-600"
+               activeFilter === "all" ? "bg-white text-black border-white" : "text-m3-on-surface-variant border-m3-outline-variant hover:border-neutral-600"
              )}
            >
              All_Artifacts
@@ -434,7 +512,7 @@ export default function CloudVault() {
                onClick={() => setActiveFilter(type)}
                className={cn(
                  "px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                 activeFilter === type ? "bg-emerald-500 text-black border-emerald-500" : "text-neutral-500 border-neutral-800 hover:border-neutral-600"
+                 activeFilter === type ? "bg-emerald-500 text-black border-emerald-500" : "text-m3-on-surface-variant border-m3-outline-variant hover:border-neutral-600"
                )}
              >
                {typeIcons[type]} {type}
@@ -454,7 +532,7 @@ export default function CloudVault() {
              }}
              className={cn(
                "px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-               isMultiSelect ? "bg-sky-500 text-black border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.3)]" : "text-neutral-500 border-neutral-800 hover:border-neutral-600"
+               isMultiSelect ? "bg-sky-500 text-black border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.3)]" : "text-m3-on-surface-variant border-m3-outline-variant hover:border-neutral-600"
              )}
            >
              {isMultiSelect ? "Exit_Batch" : "Batch_Mode"}
@@ -462,6 +540,19 @@ export default function CloudVault() {
            
            {isMultiSelect && (
              <>
+               {selectedForBatch.size > 0 && (
+                 <span className="text-[10px] font-black uppercase tracking-widest text-m3-on-surface-variant flex items-center px-2">
+                   Selected Items: {selectedForBatch.size}
+                 </span>
+               )}
+               <button
+                 onClick={handleBulkTagClick}
+                 disabled={selectedForBatch.size === 0}
+                 className="px-4 py-1.5 rounded-full border border-indigo-500 bg-indigo-500/10 text-indigo-400 font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 hover:bg-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+               >
+                 <Tag className="w-3.5 h-3.5" />
+                 Bulk Tag ({selectedForBatch.size})
+               </button>
                <button
                  onClick={handleBatchDownload}
                  disabled={selectedForBatch.size === 0}
@@ -485,14 +576,14 @@ export default function CloudVault() {
 
       {allTags.length > 0 && (
         <div className="flex items-center gap-2 pb-4 overflow-x-auto scrollbar-none">
-          <Tag className="w-4 h-4 text-neutral-500 shrink-0" />
+          <Tag className="w-4 h-4 text-m3-on-surface-variant shrink-0" />
           {allTags.map(tag => (
              <button
                key={tag}
                onClick={() => toggleTagFilter(tag)}
                className={cn(
                  "px-3 py-1 rounded-full border text-[9px] font-bold uppercase tracking-widest transition-all shrink-0",
-                 selectedTags.includes(tag) ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/50" : "bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300"
+                 selectedTags.includes(tag) ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/50" : "bg-m3-surface-variant border-m3-outline-variant text-m3-on-surface-variant hover:text-m3-on-surface"
                )}
              >
                #{tag}
@@ -501,11 +592,11 @@ export default function CloudVault() {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 flex bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden shadow-2xl divide-x divide-neutral-900">
+      <div className="flex-1 min-h-0 flex bg-m3-background border border-m3-outline-variant rounded-2xl overflow-hidden shadow-m3-3 divide-x divide-m3-outline-variant">
         {/* Sidebar Registry */}
         <div className="w-[380px] flex flex-col flex-none overflow-hidden">
-           <div className="p-4 bg-black/40 border-b border-neutral-900 border-r border-neutral-900">
-              <div className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest font-bold mb-3 flex items-center justify-between">
+           <div className="p-4 bg-m3-surface border-b border-m3-outline border-r border-m3-outline">
+              <div className="text-[10px] font-mono text-m3-on-surface-variant uppercase tracking-widest font-bold mb-3 flex items-center justify-between">
                 <span>Asset_Manifest</span>
                 {isMultiSelect && (
                    <button 
@@ -516,7 +607,7 @@ export default function CloudVault() {
                            setSelectedForBatch(new Set(filteredArtifacts.map(a => a.id)));
                         }
                      }}
-                     className="flex items-center gap-1.5 text-[9px] hover:text-white transition-colors cursor-pointer"
+                     className="flex items-center gap-1.5 text-[9px] hover:text-m3-on-surface transition-colors cursor-pointer"
                    >
                      {selectedForBatch.size === filteredArtifacts.length && filteredArtifacts.length > 0 ? <CheckSquare className="w-3.5 h-3.5 text-sky-500" /> : <Square className="w-3.5 h-3.5" />}
                      Select Filtered
@@ -524,11 +615,11 @@ export default function CloudVault() {
                  )}
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => toggleSort('title')} className="flex items-center flex-1 justify-between p-2 rounded-lg bg-neutral-900/50 hover:bg-neutral-800 text-[10px] font-bold text-neutral-400 uppercase tracking-widest transition-colors">
-                  File Name {sortConfig.key === 'title' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3.5 h-3.5 bg-neutral-800 rounded text-white"/> : <ChevronDown className="w-3.5 h-3.5 bg-neutral-800 rounded text-white"/>)}
+                <button onClick={() => toggleSort('title')} className="flex items-center flex-1 justify-between p-2 rounded-lg bg-m3-surface-variant hover:bg-m3-surface-variant text-[10px] font-bold text-m3-on-surface-variant uppercase tracking-widest transition-colors">
+                  File Name {sortConfig.key === 'title' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3.5 h-3.5 bg-m3-surface-variant rounded text-m3-on-surface"/> : <ChevronDown className="w-3.5 h-3.5 bg-m3-surface-variant rounded text-m3-on-surface"/>)}
                 </button>
-                <button onClick={() => toggleSort('type')} className="flex items-center w-24 justify-between p-2 rounded-lg bg-neutral-900/50 hover:bg-neutral-800 text-[10px] font-bold text-neutral-400 uppercase tracking-widest transition-colors">
-                  Type {sortConfig.key === 'type' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3.5 h-3.5 bg-neutral-800 rounded text-white"/> : <ChevronDown className="w-3.5 h-3.5 bg-neutral-800 rounded text-white"/>)}
+                <button onClick={() => toggleSort('type')} className="flex items-center w-24 justify-between p-2 rounded-lg bg-m3-surface-variant hover:bg-m3-surface-variant text-[10px] font-bold text-m3-on-surface-variant uppercase tracking-widest transition-colors">
+                  Type {sortConfig.key === 'type' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3.5 h-3.5 bg-m3-surface-variant rounded text-m3-on-surface"/> : <ChevronDown className="w-3.5 h-3.5 bg-m3-surface-variant rounded text-m3-on-surface"/>)}
                 </button>
               </div>
            </div>
@@ -536,10 +627,10 @@ export default function CloudVault() {
            <div className="flex-1 p-2 flex flex-col min-h-0">
             {loading ? (
               <div className="space-y-1">
-                 {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl bg-neutral-900/50" />)}
+                 {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl bg-m3-surface-variant" />)}
               </div>
             ) : filteredArtifacts.length === 0 ? (
-              <div className="text-center p-12 text-neutral-700 font-mono text-[10px] uppercase font-bold italic tracking-wider">Empty_Registry</div>
+              <div className="text-center p-12 text-m3-on-surface-variant font-mono text-[10px] uppercase font-bold italic tracking-wider">Empty_Registry</div>
             ) : (
               <div ref={containerRef} className="flex-1 w-full min-h-0">
                 {containerSize.height > 0 && containerSize.width > 0 && (
@@ -556,9 +647,9 @@ export default function CloudVault() {
                        return (
                          <div style={style} className="pb-2 pr-2">
                            <motion.button
-                             initial={false}
-                             animate={isSelected && isMultiSelect ? { scale: 0.98 } : { scale: 1 }}
-                             transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                             initial={{ opacity: 0, y: 15 }}
+                             animate={{ opacity: 1, y: 0, scale: isSelected && isMultiSelect ? 0.98 : 1 }}
+                             transition={{ type: "spring", stiffness: 300, damping: 20, delay: index < 15 ? index * 0.05 : 0 }}
                              onClick={() => {
                                if (isMultiSelect) {
                                  const newSet = new Set(selectedForBatch);
@@ -571,9 +662,9 @@ export default function CloudVault() {
                              }}
                              className={cn(
                                "w-full h-full flex items-center gap-4 p-4 rounded-xl border transition-colors duration-300 text-left group ease-out",
-                               isSelected && isMultiSelect ? "bg-neutral-900 border-sky-500/50 shadow-[0_0_15px_rgba(14,165,233,0.15)] z-10 relative" : "",
-                               isSelected && !isMultiSelect ? "bg-neutral-900 border-neutral-800 shadow-inner" : "",
-                               !isSelected ? "bg-transparent border-transparent hover:bg-neutral-900/50" : ""
+                               isSelected && isMultiSelect ? "bg-m3-surface-variant border-sky-500/50 shadow-[0_0_15px_rgba(14,165,233,0.15)] z-10 relative" : "",
+                               isSelected && !isMultiSelect ? "bg-m3-surface-variant border-m3-outline-variant shadow-m3-1" : "",
+                               !isSelected ? "bg-transparent border-transparent hover:bg-m3-surface-variant" : ""
                              )}
                            >
                              {isMultiSelect && (
@@ -581,33 +672,36 @@ export default function CloudVault() {
                                  initial={false}
                                  animate={selectedForBatch.has(art.id) ? { scale: [1, 1.2, 1] } : { scale: 1 }}
                                  transition={{ duration: 0.2 }}
-                                 className="shrink-0 text-neutral-500 group-hover:text-sky-400 transition-colors"
+                                 className="shrink-0 text-m3-on-surface-variant group-hover:text-sky-400 transition-colors"
                                >
                                  {selectedForBatch.has(art.id) ? <CheckSquare className="w-5 h-5 text-sky-400" /> : <Square className="w-5 h-5" />}
                                </motion.div>
                              )}
-                             <div className={cn("p-2 rounded-lg border transition-colors shrink-0", selectedArtifact?.id === art.id ? "bg-black border-neutral-800" : "bg-neutral-900 border-neutral-800")}>
+                             <div className={cn("p-2 rounded-lg border transition-colors shrink-0", selectedArtifact?.id === art.id ? "bg-m3-surface border-m3-outline-variant" : "bg-m3-surface-variant border-m3-outline-variant")}>
                                {typeIcons[art.type] || <Box className="w-5 h-5" />}
                              </div>
                              <div className="flex-1 min-w-0">
-                               <h4 className="text-sm font-bold text-neutral-200 truncate group-hover:text-white transition-colors">
+                               <h4 className="text-sm font-bold text-m3-on-surface truncate group-hover:text-m3-on-surface transition-colors">
                                  <HighlightText text={art.title} highlight={searchQuery} />
                                </h4>
+                               <div className="text-[10px] text-m3-on-surface-variant truncate mt-0.5">
+                                 <HighlightSnippet text={art.content} highlight={searchQuery} />
+                               </div>
                                <div className="flex flex-col mt-1 gap-1">
                                  <div className="flex items-center gap-2">
-                                   <span className="text-[9px] font-mono text-neutral-600 uppercase font-bold tracking-tighter">ID: {art.id.slice(0,8)}</span>
-                                   <div className="w-1 h-1 rounded-full bg-neutral-800" />
-                                   <span className="text-[9px] font-mono text-neutral-500 uppercase">{art.type}</span>
+                                   <span className="text-[9px] font-mono text-m3-on-surface-variant uppercase font-bold tracking-tighter">ID: {art.id.slice(0,8)}</span>
+                                   <div className="w-1 h-1 rounded-full bg-m3-surface-variant" />
+                                   <span className="text-[9px] font-mono text-m3-on-surface-variant uppercase">{art.type}</span>
                                  </div>
                                  {art.tags && art.tags.length > 0 && (
                                    <div className="flex items-center gap-1 overflow-x-hidden">
                                      {art.tags.slice(0,3).map(tag => (
-                                       <span key={tag} className="text-[8px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-500 uppercase tracking-widest truncate max-w-[60px]">
+                                       <span key={tag} className="text-[8px] px-1.5 py-0.5 rounded bg-m3-surface-variant text-m3-on-surface-variant uppercase tracking-widest truncate max-w-[60px]">
                                          {tag}
                                        </span>
                                      ))}
                                      {art.tags.length > 3 && (
-                                       <span className="text-[8px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-500">+{art.tags.length - 3}</span>
+                                       <span className="text-[8px] px-1.5 py-0.5 rounded bg-m3-surface-variant text-m3-on-surface-variant">+{art.tags.length - 3}</span>
                                      )}
                                    </div>
                                  )}
@@ -625,13 +719,13 @@ export default function CloudVault() {
         </div>
 
         {/* Audit Pane */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-black/20">
+        <div className="flex-1 flex flex-col overflow-hidden bg-m3-surface">
            {selectedArtifact ? (
              <>
-               <header className="flex-none h-14 border-b border-neutral-900 bg-black/40 px-6 flex items-center justify-between">
+               <header className="flex-none h-14 border-b border-m3-outline bg-m3-surface px-6 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="text-sm font-bold text-white tracking-tight">{selectedArtifact.title}</div>
-                    <div className={cn("px-2 py-0.5 border text-neutral-500 text-[9px] font-mono uppercase tracking-widest rounded leading-none transition-colors", typeColors[selectedArtifact.type])}>
+                    <div className="text-sm font-bold text-m3-on-surface tracking-tight">{selectedArtifact.title}</div>
+                    <div className={cn("px-2 py-0.5 border text-m3-on-surface-variant text-[9px] font-mono uppercase tracking-widest rounded leading-none transition-colors", typeColors[selectedArtifact.type])}>
                       {selectedArtifact.type}
                     </div>
                   </div>
@@ -680,15 +774,15 @@ export default function CloudVault() {
                   </div>
                </header>
                
-               <div className="bg-neutral-950/50 border-b border-neutral-900 px-6 py-3 flex items-center flex-wrap gap-2">
-                 <Tag className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
+               <div className="bg-m3-background border-b border-m3-outline px-6 py-3 flex items-center flex-wrap gap-2">
+                 <Tag className="w-3.5 h-3.5 text-m3-on-surface-variant shrink-0" />
                  {selectedArtifact.tags?.map(t => (
-                   <span key={t} className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-[9px] uppercase font-bold tracking-widest text-neutral-300">
+                   <span key={t} className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded bg-m3-surface-variant border border-m3-outline-variant text-[9px] uppercase font-bold tracking-widest text-m3-on-surface">
                      {t}
                      <button
                        onClick={() => handleRemoveTag(t)}
                        disabled={isUpdatingTags}
-                       className="p-0.5 rounded-sm hover:bg-neutral-800 text-neutral-500 hover:text-red-400 transition-colors disabled:opacity-50"
+                       className="p-0.5 rounded-sm hover:bg-m3-surface-variant text-m3-on-surface-variant hover:text-red-400 transition-colors disabled:opacity-50"
                      >
                        <X className="w-2.5 h-2.5" />
                      </button>
@@ -701,7 +795,7 @@ export default function CloudVault() {
                    onKeyDown={handleAddTag}
                    disabled={isUpdatingTags}
                    placeholder="Add tag..."
-                   className="bg-transparent border-none outline-none text-[9px] uppercase font-bold tracking-widest w-[100px] text-neutral-400 placeholder:text-neutral-700 disabled:opacity-50"
+                   className="bg-transparent border-none outline-none text-[9px] uppercase font-bold tracking-widest w-[100px] text-m3-on-surface-variant placeholder:text-m3-on-surface-variant disabled:opacity-50"
                  />
                </div>
 
@@ -711,7 +805,7 @@ export default function CloudVault() {
                        <div className="relative group animate-float-slow">
                           <div className="absolute inset-0 bg-emerald-500/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
                           <div 
-                            className="w-96 h-96 bg-neutral-950 border-4 border-neutral-900 rounded-3xl shadow-2xl relative z-10 transition-transform duration-700 preserve-3d group-hover:rotate-y-12 group-hover:rotate-x-12"
+                            className="w-96 h-96 bg-m3-background border-4 border-m3-outline rounded-3xl shadow-m3-3 relative z-10 transition-transform duration-700 preserve-3d group-hover:rotate-y-12 group-hover:rotate-x-12"
                             style={{
                               backgroundImage: selectedArtifact.content.startsWith("data:image") ? `url("${selectedArtifact.content}")` : `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(selectedArtifact.content)}")`,
                               backgroundSize: '100% 100%',
@@ -723,21 +817,21 @@ export default function CloudVault() {
                              <div className="absolute inset-0 border border-white/5 rounded-2xl pointer-events-none grid grid-cols-8 grid-rows-8 opacity-20" />
                           </div>
                           
-                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-8 py-2 px-4 bg-neutral-900 border border-neutral-800 rounded-lg text-[9px] font-mono text-neutral-500 uppercase tracking-widest whitespace-nowrap">
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-8 py-2 px-4 bg-m3-surface-variant border border-m3-outline-variant rounded-lg text-[9px] font-mono text-m3-on-surface-variant uppercase tracking-widest whitespace-nowrap">
                              Mesh_Topology: standard x64 // UV-Layout: Valid
                           </div>
                        </div>
                     </div>
                   ) : (
-                    <div className="prose prose-invert prose-xs max-w-none prose-pre:bg-black/50 prose-pre:border-neutral-800 prose-code:text-emerald-400">
+                    <div className="prose prose-invert prose-xs max-w-none prose-pre:bg-m3-surface prose-pre:border-m3-outline-variant prose-code:text-emerald-400">
                        <Markdown>{selectedArtifact.content}</Markdown>
                     </div>
                   )}
                </div>
              </>
            ) : (
-             <div className="h-full flex flex-col items-center justify-center text-neutral-800 px-8 text-center space-y-4">
-                <div className="w-16 h-16 rounded-3xl border border-neutral-900 bg-neutral-950 flex items-center justify-center shadow-inner">
+             <div className="h-full flex flex-col items-center justify-center text-m3-outline px-8 text-center space-y-4">
+                <div className="w-16 h-16 rounded-3xl border border-m3-outline bg-m3-background flex items-center justify-center shadow-m3-1">
                    <Activity className="w-8 h-8 opacity-10" />
                 </div>
                 <p className="text-[10px] font-mono uppercase tracking-[0.3em] font-bold">Registry_Idle // Select_Node</p>
@@ -747,23 +841,60 @@ export default function CloudVault() {
       </div>
       
       {showBatchDeleteModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl flex flex-col gap-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-m3-surface backdrop-blur-sm p-4">
+          <div className="bg-m3-surface-variant border border-m3-outline-variant rounded-2xl max-w-sm w-full p-6 shadow-m3-3 flex flex-col gap-6">
              <div className="flex items-start gap-4">
                <div className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0 mt-1">
                   <AlertTriangle className="w-5 h-5 text-red-500" />
                </div>
                <div>
-                 <h3 className="text-lg font-bold text-white tracking-tight">Confirm Deletion</h3>
-                 <p className="text-sm text-neutral-400 mt-1 leading-relaxed">
+                 <h3 className="text-lg font-bold text-m3-on-surface tracking-tight">Confirm Deletion</h3>
+                 <p className="text-sm text-m3-on-surface-variant mt-1 leading-relaxed">
                    Are you sure you want to delete {selectedForBatch.size} artifact{selectedForBatch.size > 1 ? 's' : ''}? This action cannot be undone.
                  </p>
                </div>
              </div>
              
              <div className="flex justify-end gap-3 w-full">
-               <button onClick={() => setShowBatchDeleteModal(false)} className="px-5 py-2.5 rounded-xl border border-neutral-800 text-neutral-300 hover:bg-neutral-800 hover:text-white transition-colors text-sm font-bold">Cancel</button>
-               <button onClick={confirmBatchDelete} className="px-5 py-2.5 rounded-xl border border-red-500 bg-red-500 hover:bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.2)] transition-all text-sm font-bold">Yes, delete</button>
+               <button onClick={() => setShowBatchDeleteModal(false)} className="px-5 py-2.5 rounded-xl border border-m3-outline-variant text-m3-on-surface hover:bg-m3-surface-variant hover:text-m3-on-surface transition-colors text-sm font-bold">Cancel</button>
+               <button onClick={confirmBatchDelete} className="px-5 py-2.5 rounded-xl border border-red-500 bg-red-500 hover:bg-red-600 text-m3-on-surface shadow-[0_0_15px_rgba(239,68,68,0.2)] transition-all text-sm font-bold">Yes, delete</button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {showBulkTagModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-m3-surface/80 backdrop-blur-sm p-4">
+          <div className="bg-m3-surface border border-m3-outline rounded-2xl max-w-sm w-full p-6 shadow-m3-3 flex flex-col gap-4">
+             <div className="flex items-start gap-4">
+               <div className="w-10 h-10 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0 mt-1">
+                  <Tag className="w-5 h-5 text-indigo-500" />
+               </div>
+               <div className="flex-1 w-full">
+                 <h3 className="text-lg font-bold text-m3-on-surface tracking-tight">Bulk Tag Artifacts</h3>
+                 <p className="text-sm text-m3-on-surface-variant mt-1 leading-relaxed">
+                   Apply a shared tag to {selectedForBatch.size} selected artifact{selectedForBatch.size > 1 ? 's' : ''}.
+                 </p>
+               </div>
+             </div>
+             
+             <div className="w-full mt-2">
+                <input
+                  type="text"
+                  value={bulkTagInput}
+                  onChange={(e) => setBulkTagInput(e.target.value)}
+                  placeholder="e.g. environment, final-boss"
+                  className="w-full bg-m3-surface-variant border-2 border-m3-outline-variant focus:border-indigo-500 rounded-xl px-4 py-3 outline-none text-m3-on-surface text-sm transition-all"
+                  onKeyDown={e => {
+                    if (e.key === "Enter") confirmBulkTag();
+                  }}
+                  autoFocus
+                />
+             </div>
+             
+             <div className="flex justify-end gap-3 w-full mt-2">
+               <button onClick={() => setShowBulkTagModal(false)} className="px-5 py-2.5 rounded-xl border border-m3-outline-variant text-m3-on-surface hover:bg-m3-surface-variant transition-colors text-sm font-bold">Cancel</button>
+               <button onClick={confirmBulkTag} disabled={!bulkTagInput.trim()} className="px-5 py-2.5 rounded-xl border border-indigo-500 bg-indigo-500 hover:bg-indigo-600 text-m3-on-surface shadow-[0_0_15px_rgba(99,102,241,0.2)] transition-all text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed">Apply Tags</button>
              </div>
           </div>
         </div>

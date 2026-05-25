@@ -78,7 +78,7 @@ export const GeometryEngine = {
     }
     
     // The optimization value acts as max length of merged block (e.g. 100 => up to 10 blocks)
-    let maxMerge = Math.max(2, Math.ceil(optimizationLevel / 10));
+    const maxMerge = Math.max(2, Math.ceil(optimizationLevel / 10));
 
     const voxelMap = new Map<string, any>();
     for (const v of voxels) voxelMap.set(`${v.position[0]},${v.position[1]},${v.position[2]}`, v);

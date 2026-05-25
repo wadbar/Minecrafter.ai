@@ -102,7 +102,7 @@ export default function TextureGenerator() {
     const isStandardRatio = aspectRatio === "1:1";
 
     if (!isSquare || !isStandardRes || !isStandardRatio) {
-      let issues = [];
+      const issues = [];
       if (!isSquare) issues.push(t.textureGenerator.notSquare);
       if (!isStandardRes) issues.push(t.textureGenerator.nonStandardRes);
       if (!isStandardRatio) issues.push(t.textureGenerator.incorrectRatio);

@@ -108,7 +108,7 @@ export default function SkinGenerator() {
       }
     };
 
-    let validationTimer: any = null;
+    const validationTimer: any = null;
     const triggerValidation = async () => {
        await sleep(800);
        if (!active) return;
